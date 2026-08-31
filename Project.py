@@ -26,7 +26,7 @@ class Car:
 
         self.speed = [0, 0, 0]
 
-        self.accelration = 0.1
+        self.accelration = 0.05
 
         self.decelration = 0.2
 
@@ -39,8 +39,8 @@ class Car:
         self.quadric = quadric
         self.health = 100
 
-
-        # Approximate collision radius of the car, used for obstacle checks
+        self.was_colliding = False
+        
         self.radius = 35
 
     def draw_car(self):
@@ -159,7 +159,7 @@ class Car:
 
         glPopMatrix()
 
-    def update(self, keys, collision_check=None):
+    def update(self, keys, collision_check):
 
         if GLUT_KEY_UP in keys:
 
@@ -220,13 +220,24 @@ class Car:
         new_x = self.x - math.sin(angle_rad) * self.speed[2]
         new_z = self.z - math.cos(angle_rad) * self.speed[2]
 
-        if collision_check is not None and collision_check(new_x, new_z):
+        flag, coord = collision_check(new_x, new_z)
 
-            # Hit an obstacle -- stop dead instead of moving into it
+        if flag:
+
+            # Stop the car
+            current_speed =  self.speed[2] 
             self.speed[2] = 0
-            self.health = max(0,self.health-10)
+
+            # Damage only when entering the collision
+            if not self.was_colliding:
+                self.health = max(0, self.health - int(20 * current_speed / self.max_speed))
+
+            self.was_colliding = True
 
         else:
+
+            # Car is no longer touching an obstacle
+            self.was_colliding = False
 
             self.x = new_x
             self.z = new_z
@@ -266,7 +277,6 @@ class Car:
         glEnd()
 
     def show_car(self):
-
         self.draw_car()
 
     def draw_wheel(self, x, y, z):
@@ -410,10 +420,7 @@ class CarWarfare:
 
     def generate_chunk(self, chunk_x, chunk_z):
 
-        # Deterministic chunk information
-        # Create a deterministic random generator for this chunk
-        seed = self.get_chunk_seed(chunk_x, chunk_z)
-        rng = random.Random(seed)
+        ran = random.Random(self.get_chunk_seed(chunk_x, chunk_z))
 
         trees = []
         stones = []
@@ -424,18 +431,18 @@ class CarWarfare:
         if random.random() < 0.5:
             for i in range(random.randrange(1, 3, 1)):
 
-                x = rng.uniform(
+                x = ran.uniform(
                     -CHUNK_SIZE / 2 + 50,
                     CHUNK_SIZE / 2 - 50
                 )
 
-                z = rng.uniform(
+                z = ran.uniform(
                     -CHUNK_SIZE / 2 + 50,
                     CHUNK_SIZE / 2 - 50
                 )
 
                 # Random tree size
-                scale = rng.uniform(0.8, 1.4)
+                scale = ran.uniform(0.8, 1.4)
 
                 trees.append({
                     "x": x,
@@ -449,17 +456,17 @@ class CarWarfare:
         if random.random() < 0.2:
             for i in range(random.randrange(1, 2, 1)):
 
-                x = rng.uniform(
+                x = ran.uniform(
                     -CHUNK_SIZE / 2 + 30,
                     CHUNK_SIZE / 2 - 30
                 )
 
-                z = rng.uniform(
+                z = ran.uniform(
                     -CHUNK_SIZE / 2 + 30,
                     CHUNK_SIZE / 2 - 30
                 )
 
-                scale = rng.uniform(0.5, 1.5)
+                scale = ran.uniform(0.5, 1.5)
 
                 stones.append({
                     "x": x,
@@ -514,7 +521,7 @@ class CarWarfare:
 
     def generate_world(self):
 
-        self.chunks = {}
+        self.chunks_metadata = {}
         player_chunk_x = 0
         player_chunk_z = 0
 
@@ -524,7 +531,7 @@ class CarWarfare:
 
             for z in range(player_chunk_z - half, player_chunk_z + half + 1):
 
-                self.chunks[(x, z)] = self.generate_chunk(x, z)
+                self.chunks_metadata[(x, z)] = self.generate_chunk(x, z)
 
     def draw_ground(self):
 
@@ -578,7 +585,7 @@ class CarWarfare:
 
     def update_chunks(self):
 
-        player_chunk_x, player_chunk_z = self.get_player_chunk()
+        p_chunk_x, p_chunk_z = self.get_player_chunk()
 
         half = CHUNK_COUNT // 2
 
@@ -586,32 +593,24 @@ class CarWarfare:
         # Generate missing chunks
         # --------------------------------
 
-        for x in range(
-            player_chunk_x - half,
-            player_chunk_x + half + 1
-        ):
+        for x in range(p_chunk_x - half,p_chunk_x + half + 1):
 
-            for z in range(
-                player_chunk_z - half,
-                player_chunk_z + half + 1
-            ):
+            for z in range(p_chunk_z - half,p_chunk_z + half + 1):
 
-                if (x, z) not in self.chunks:
+                if (x, z) not in self.chunks_metadata:
 
-                    self.chunks[(x, z)] = self.generate_chunk(x, z)
+                    self.chunks_metadata[(x, z)] = self.generate_chunk(x, z)
 
-        # --------------------------------
-        # Remove chunks that are too far
-        # --------------------------------
+
 
         chunks_to_remove = []
 
-        for chunk_x, chunk_z in self.chunks:
+        for chunk_x, chunk_z in self.chunks_metadata:
 
             if (
-                abs(chunk_x - player_chunk_x) > half
+                abs(chunk_x - p_chunk_x) > half
                 or
-                abs(chunk_z - player_chunk_z) > half
+                abs(chunk_z - p_chunk_z) > half
             ):
 
                 chunks_to_remove.append(
@@ -620,15 +619,11 @@ class CarWarfare:
 
         for chunk in chunks_to_remove:
 
-            del self.chunks[chunk]
+            del self.chunks_metadata[chunk]
 
         return chunk_x, chunk_z
 
     def check_collision(self, x, z):
-        """
-        Returns True if the point (x, z) would overlap a tree or stone
-        in the player's current chunk or any of its immediate neighbors.
-        """
 
         player_chunk_x, player_chunk_z = self.get_player_chunk()
 
@@ -636,7 +631,7 @@ class CarWarfare:
 
             for dz in (-1, 0, 1):
 
-                chunk = self.chunks.get(
+                chunk = self.chunks_metadata.get(
                     (player_chunk_x + dx, player_chunk_z + dz)
                 )
 
@@ -655,7 +650,7 @@ class CarWarfare:
 
                     if dist < self.player.radius + TREE_RADIUS * tree["scale"]:
 
-                        return True
+                        return True,(tx,tz)
 
                 for stone in chunk["stones"]:
 
@@ -665,13 +660,13 @@ class CarWarfare:
                     dist = math.hypot(x - sx, z - sz)
 
                     if dist < self.player.radius + STONE_RADIUS * stone["scale"]:
-                        return True
+                        return True, (sx,sz)
 
-        return False
+        return False,()
 
     def draw_world(self):
 
-        for key, chunk in self.chunks.items():
+        for key, chunk in self.chunks_metadata.items():
 
             chunk_x = chunk["x"]
             chunk_z = chunk["z"]
@@ -764,11 +759,6 @@ class CarWarfare:
 
         if self.pov:
 
-            # ------------------------------------------------
-            # FIRST PERSON -- camera sits inside the car,
-            # looking in the direction it's facing
-            # ------------------------------------------------
-
             angle = math.radians(player.player_angle)
             camera_x = player.x
             camera_y = player.y + 65
@@ -779,11 +769,6 @@ class CarWarfare:
             target_z = camera_z - math.cos(angle) * 100
 
         else:
-
-            # ------------------------------------------------
-            # THIRD PERSON -- camera trails behind the car,
-            # using the smoothed camera_angle for a swing effect
-            # ------------------------------------------------
 
             angle = math.radians(self.camera_angle)
 
@@ -814,22 +799,13 @@ class CarWarfare:
 
         self.player.update(self.keys, collision_check=self.check_collision)
 
-        # Update the world around the player
         self.update_chunks()
 
         angle_diff = self.player.player_angle - self.camera_angle
 
-        self.camera_angle += (
-            angle_diff *
-            self.camera_smoothing
-        )
+        self.camera_angle += angle_diff * self.camera_smoothing
 
-        self.player.wheel_spin_angle += (
-            self.player.speed[2]
-            +
-            angle_diff * self.camera_smoothing
-        )
-
+        self.player.wheel_spin_angle += (self.player.speed[2] + angle_diff * self.camera_smoothing)
         glutPostRedisplay()
 
     def showScreen(self):
