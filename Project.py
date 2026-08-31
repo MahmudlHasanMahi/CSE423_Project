@@ -16,6 +16,54 @@ TREE_RADIUS = 40
 STONE_RADIUS = 35
 
 
+class Bullet:
+    
+    def __init__(self, x, y, z, angle, quadric):
+
+        self.x = x
+        self.y = y
+        self.z = z
+
+        self.angle = angle
+        self.speed = 75
+
+        self.quadric = quadric
+
+        self.alive = True
+        
+
+
+    def update(self):
+
+        angle_rad = math.radians(self.angle)
+        self.x -= math.sin(angle_rad) * self.speed
+        self.z -= math.cos(angle_rad) * self.speed
+
+
+    def draw(self):
+
+        glPushMatrix()
+
+        glTranslatef(
+            self.x,
+            self.y,
+            self.z
+        )
+
+        glColor3f(
+            1.0,
+            1.0,
+            0.0
+        )
+
+        glutSolidSphere(
+            4,
+            10,
+            10
+        )
+
+        glPopMatrix()
+
 class Car:
 
     def __init__(self, x, y, z, quadric):
@@ -26,7 +74,7 @@ class Car:
 
         self.speed = [0, 0, 0]
 
-        self.accelration = 0.05
+        self.accelration = 0.07
 
         self.decelration = 0.2
 
@@ -40,8 +88,126 @@ class Car:
         self.health = 100
 
         self.was_colliding = False
-        
+
         self.radius = 35
+        self.change_weapon = False
+        self.gun_rotation = 0.0
+        self.bullets = []
+        self.muzzle_flash_timer = 0
+        self.muzzle_flash_duration = 4
+
+    def fire_bullet(self):
+    
+        angle = self.player_angle
+
+        angle_rad = math.radians(angle)
+
+        distance = 110
+
+        bullet_x = self.x - math.sin(angle_rad) * distance
+        bullet_z = self.z - math.cos(angle_rad) * distance
+
+        bullet_y = self.y + 60
+
+        bullet = Bullet(
+            bullet_x,
+            bullet_y,
+            bullet_z,
+            angle,
+            self.quadric
+        )
+
+        self.bullets.append(bullet)
+        self.muzzle_flash_timer = self.muzzle_flash_duration
+
+    def draw_gun(self):
+        
+
+        glPushMatrix()
+
+        glTranslatef(0, 55, 0)
+
+        glColor3f(0.15, 0.15, 0.15)
+
+        glutSolidCube(35)
+
+        glPopMatrix()
+
+
+     
+
+        glPushMatrix()
+
+        glTranslatef(0, 60, 0)
+
+        # Rotation of whole barrel assembly
+        glRotatef(
+            self.gun_rotation,
+            0,
+            0,
+            1
+        )
+
+        radius = 5
+        w = 20
+
+        for angle in [0, 90, 180, 270]:
+
+            glPushMatrix()
+
+            angle_rad = math.radians(angle)
+
+            x = math.cos(angle_rad) * radius
+            y = math.sin(angle_rad) * radius
+
+            glTranslatef(x, y, 0)
+
+            glRotatef(
+                180,
+                1,
+                0,
+                0
+            )
+
+            for i in range(4):
+
+                if i == 0:
+                    glColor3f(71/255, 195/255, 230/255)
+                elif i == 1:
+                    glColor3f(1, 1, 0)
+                elif i == 2:
+                    glColor3f(0, 0, 0)
+                else:
+                    glColor3f(1, 1, 1)
+                    if self.muzzle_flash_timer > 0:
+                        glColor3f(219/255, 80/255, 61/255)
+
+                glPushMatrix()
+
+                glTranslatef(
+                    0,
+                    0,
+                    i * w
+                )
+
+                gluCylinder(
+                    self.quadric,
+                    2,
+                    2,
+                    w,
+                    10,
+                    10
+                )
+
+                glPopMatrix()
+
+            glPopMatrix()
+
+        glPopMatrix()
+    def draw_bullets(self):
+    
+        for bullet in self.bullets:
+            bullet.draw()
 
     def draw_car(self):
 
@@ -156,6 +322,7 @@ class Car:
 
         self.draw_text(10, 770, f"Speed {int(abs(self.speed[2]))}")
         self.draw_text(10, 750, f"Health {self.health}")
+        self.draw_gun()
 
         glPopMatrix()
 
@@ -243,6 +410,12 @@ class Car:
             self.z = new_z
 
         self.y += self.speed[1]
+        self.gun_rotation += 5
+        for bullet in self.bullets:
+            bullet.update()
+
+        if self.muzzle_flash_timer > 0:
+            self.muzzle_flash_timer -= 1
 
     def draw_circle_cap(self, z, radius=15):
 
@@ -278,6 +451,7 @@ class Car:
 
     def show_car(self):
         self.draw_car()
+        self.draw_bullets()
 
     def draw_wheel(self, x, y, z):
 
@@ -829,6 +1003,7 @@ class CarWarfare:
         self.draw_world()
 
         self.player.show_car()
+   
 
         glutSwapBuffers()
 
@@ -844,6 +1019,16 @@ class CarWarfare:
     def keyboardListener(self, key, x, y):
         if key == b'q':
             self.pov = not self.pov
+        if key== b'a':
+            self.arrow[0] -= 20
+        if key== b'd':
+            self.arrow[0] += 20
+        if key == b'w':
+            self.arrow[1] += 20
+        if key == b's':
+            self.arrow[1] -= 20
+        elif key == b' ':
+            self.player.fire_bullet()
 
 
 def main():
