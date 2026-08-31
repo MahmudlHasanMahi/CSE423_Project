@@ -15,30 +15,113 @@ CHUNK_COUNT = 16
 TREE_RADIUS = 40
 STONE_RADIUS = 35
 
-
-class Bullet:
-    
+class Projectile:
     def __init__(self, x, y, z, angle, quadric):
-
         self.x = x
         self.y = y
         self.z = z
 
         self.angle = angle
-        self.speed = 75
+        self._speed = 75
 
         self.quadric = quadric
 
         self.alive = True
-        
-
-
+    @property
+    def speed(self):
+        return self._speed
     def update(self):
-
+    
         angle_rad = math.radians(self.angle)
         self.x -= math.sin(angle_rad) * self.speed
         self.z -= math.cos(angle_rad) * self.speed
 
+    def set_speed(self,speed):
+        self._speed = speed    
+
+
+
+class Grenade(Projectile):
+    
+    def __init__(self, x, y, z, angle, quadric):
+
+        super().__init__(x, y, z, angle, quadric)
+
+        angle_rad = math.radians(angle)
+
+        speed = 25
+        self.vx = -math.sin(angle_rad) * speed
+        self.vz = -math.cos(angle_rad) * speed
+        self.vy = 12
+
+        self.gravity = 0.6
+
+        self.exploded = False
+        self.explosion_timer = 0
+        self.explosion_duration = 5
+
+    def update(self):
+
+        if self.exploded:
+
+            self.explosion_timer -= 1
+
+            if self.explosion_timer <= 0:
+                self.alive = False
+            return
+
+
+        self.vy -= self.gravity
+
+        self.x += self.vx
+        self.y += self.vy
+        self.z += self.vz
+
+        if self.y <= 10:
+
+            self.y = 10
+            self.exploded = True
+            self.explosion_timer = self.explosion_duration
+
+    def draw(self):
+
+        glPushMatrix()
+
+        glTranslatef(
+            self.x,
+            self.y,
+            self.z
+        )
+
+        if not self.exploded:
+
+            glColor3f(0.1, 0.35, 0.1)
+
+            glutSolidSphere(
+                8,
+                12,
+                12
+            )
+
+        else:
+
+            t = self.explosion_timer / self.explosion_duration
+            radius = (1 - t) * 90 + 10
+
+            glColor3f(1.0, 0.5 * t + 0.2, 0.0)
+
+            glutSolidSphere(
+                radius,
+                14,
+                14
+            )
+
+        glPopMatrix()
+class Bullet(Projectile):
+    
+    def __init__(self, x, y, z, angle, quadric):
+        super().__init__(x, y, z, angle, quadric)
+        
 
     def draw(self):
 
@@ -90,13 +173,27 @@ class Car:
         self.was_colliding = False
 
         self.radius = 35
-        self.change_weapon = False
+
+ 
         self.gun_rotation = 0.0
         self.bullets = []
         self.muzzle_flash_timer = 0
         self.muzzle_flash_duration = 4
 
+        self.grenades = []
+        self.weapon_types = ["gun", "grenade"]
+        self.weapon_index = 0
+
+    def switch_weapon(self):
+    
+        self.weapon_index = 1 - self.weapon_index
     def fire_bullet(self):
+        if self.weapon_types[self.weapon_index] == "gun":
+            self._fire_gun()
+        else:
+            self._fire_grenade()
+
+    def _fire_gun(self):
     
         angle = self.player_angle
 
@@ -120,8 +217,38 @@ class Car:
         self.bullets.append(bullet)
         self.muzzle_flash_timer = self.muzzle_flash_duration
 
+    def _fire_grenade(self):
+    
+        angle = self.player_angle
+
+        angle_rad = math.radians(angle)
+
+        distance = 90
+
+        x = self.x - math.sin(angle_rad) * distance
+        z = self.z - math.cos(angle_rad) * distance
+
+        y = self.y + 55
+
+        grenade = Grenade(
+            x,
+            y,
+            z,
+            angle,
+            self.quadric
+        )
+
+        self.grenades.append(grenade)
+        self.muzzle_flash_timer = self.muzzle_flash_duration
+
     def draw_gun(self):
         
+        if self.weapon_types[self.weapon_index] == "gun":
+            self._draw_machine_gun()
+        else:
+            self._draw_grenade_launcher()
+
+    def _draw_machine_gun(self):
 
         glPushMatrix()
 
@@ -133,14 +260,10 @@ class Car:
 
         glPopMatrix()
 
-
-     
-
         glPushMatrix()
 
         glTranslatef(0, 60, 0)
 
-        # Rotation of whole barrel assembly
         glRotatef(
             self.gun_rotation,
             0,
@@ -204,10 +327,48 @@ class Car:
             glPopMatrix()
 
         glPopMatrix()
-    def draw_bullets(self):
+
+    def _draw_grenade_launcher(self):
     
+        glPushMatrix()
+
+        glTranslatef(0, 55, 0)
+
+        glColor3f(0.2, 0.25, 0.15)
+
+        glutSolidCube(35)
+
+        glPopMatrix()
+
+        glPushMatrix()
+
+        glTranslatef(0, 60, 0)
+
+        glTranslatef(0, 0, -80)
+
+        glColor3f(0.15, 0.2, 0.1)
+
+        if self.muzzle_flash_timer > 0:
+            glColor3f(219/255, 80/255, 61/255)
+
+        gluCylinder(
+            self.quadric,
+            10,
+            10,
+            70,
+            12,
+            12
+        )
+
+        glPopMatrix()
+    
+    def draw_bullets(self):
+        
         for bullet in self.bullets:
             bullet.draw()
+
+        for grenade in self.grenades:
+            grenade.draw()
 
     def draw_car(self):
 
@@ -413,6 +574,12 @@ class Car:
         self.gun_rotation += 5
         for bullet in self.bullets:
             bullet.update()
+
+        for grenade in self.grenades:
+            grenade.update()
+
+        self.bullets = [b for b in self.bullets if b.alive]
+        self.grenades = [g for g in self.grenades if g.alive]
 
         if self.muzzle_flash_timer > 0:
             self.muzzle_flash_timer -= 1
@@ -1027,8 +1194,11 @@ class CarWarfare:
             self.arrow[1] += 20
         if key == b's':
             self.arrow[1] -= 20
-        elif key == b' ':
+        if key == b'v':
+            self.player.switch_weapon()
+        elif key == b'f':
             self.player.fire_bullet()
+        
 
 
 def main():
