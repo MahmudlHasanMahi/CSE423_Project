@@ -588,7 +588,7 @@ class PlayerCar(BaseCar):
         x = self.x - math.sin(angle_rad) * distance
         z = self.z - math.cos(angle_rad) * distance
         y = self.y + 55
-        self.grenades.append(Grenade(x, y, z, self.angle, self.quadric))
+        self.grenades.append(Grenade(x, y, z, self.angle, 50,self.quadric))
         self.muzzle_flash_timer = self.muzzle_flash_duration
 
     def draw_extras(self):
