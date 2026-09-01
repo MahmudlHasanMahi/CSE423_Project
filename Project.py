@@ -108,8 +108,9 @@ class Grenade(Projectile):
         glPopMatrix()
 
 class Bullet(Projectile):
-    def __init__(self, x, y, z, angle, quadric):
-        super().__init__(x, y, z, angle, quadric)
+    def __init__(self, x, y, z, angle, damage,quadric):
+    
+        super().__init__(x, y, z, angle, damage, quadric)
         
     def draw(self):
         glPushMatrix()
