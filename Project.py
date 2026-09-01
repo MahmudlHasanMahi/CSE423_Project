@@ -1754,7 +1754,6 @@ class CarWarfare:
 
             return
 
-        # ---- normal in-game controls (only reached while playing) ----
 
         if key == b'q':
             self.pov = not self.pov
