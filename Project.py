@@ -93,7 +93,7 @@ class Grenade(Projectile):
         glTranslatef(self.x, self.y, self.z)
 
         if not self.exploded:
-            glColor3f(0.1, 0.35, 0.1)
+            glColor3f(186/255, 140/255, 34/255)
             glutSolidSphere(8, 12, 12)
         else:
             t = self.explosion_timer / self.explosion_duration
@@ -773,7 +773,6 @@ class CarWarfare:
         self.GAMEOVER = False
 
         self.keys = set()
-        self.arrow = [0, 0]
         self.chunks = {}
         self.enemy_cars = {}
         
@@ -1463,9 +1462,9 @@ class CarWarfare:
             target_z = camera_z + forward_z * 150
         else:
             angle = math.radians(self.camera_angle)
-            camera_x = (player.x + math.sin(angle) * self.camera_distance) + self.arrow[0]
+            camera_x = (player.x + math.sin(angle) * self.camera_distance) 
             camera_y = self.camera_height
-            camera_z = (player.z + math.cos(angle) * self.camera_distance) + self.arrow[1]
+            camera_z = (player.z + math.cos(angle) * self.camera_distance) 
             target_x = player.x
             target_y = player.y
             target_z = player.z
@@ -1759,14 +1758,6 @@ class CarWarfare:
 
         if key == b'q':
             self.pov = not self.pov
-        elif key == b'a':
-            self.arrow[0] -= 20
-        elif key == b'd':
-            self.arrow[0] += 20
-        elif key == b'w':
-            self.arrow[1] += 20
-        elif key == b's':
-            self.arrow[1] -= 20
         elif key == b'v':
             self.player.switch_weapon()
         elif key == b'm':
