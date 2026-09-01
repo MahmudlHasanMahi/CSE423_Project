@@ -14,7 +14,7 @@ CHUNK_COUNT = 16
 
 TREE_RADIUS = 40
 STONE_RADIUS = 35
-
+MAX_PROJECTILE_DISTANCE = (CHUNK_COUNT // 2) * CHUNK_SIZE
 class Projectile:
     def __init__(self, x, y, z, angle, quadric):
         self.x = x
@@ -147,7 +147,15 @@ class Bullet(Projectile):
 
         glPopMatrix()
 
-class Car:
+
+class BaseCar:
+    
+    wheel_positions = [
+        (-45, -25, -45),
+        (30, -25, -45),
+        (-45, -25, 45),
+        (30, -25, 45)
+    ]
 
     def __init__(self, x, y, z, quadric):
 
@@ -155,245 +163,23 @@ class Car:
         self.y = y
         self.z = z
 
-        self.speed = [0, 0, 0]
-
-        self.accelration = 0.07
-
-        self.decelration = 0.2
-
-        self.max_speed = 30
-
-        self.turn_speed = 3
-
-        self.player_angle = 0.0
+        self.angle = 0.0
         self.wheel_spin_angle = 0.0
-        self.quadric = quadric
-        self.health = 100
 
-        self.was_colliding = False
-
-        self.radius = 35
-
- 
         self.gun_rotation = 0.0
-        self.bullets = []
+
+        self.quadric = quadric
+        self.radius = 35
         self.muzzle_flash_timer = 0
         self.muzzle_flash_duration = 4
 
-        self.grenades = []
-        self.weapon_types = ["gun", "grenade"]
-        self.weapon_index = 0
-
-    def switch_weapon(self):
-    
-        self.weapon_index = 1 - self.weapon_index
-    def fire_bullet(self):
-        if self.weapon_types[self.weapon_index] == "gun":
-            self._fire_gun()
-        else:
-            self._fire_grenade()
-
-    def _fire_gun(self):
-    
-        angle = self.player_angle
-
-        angle_rad = math.radians(angle)
-
-        distance = 110
-
-        bullet_x = self.x - math.sin(angle_rad) * distance
-        bullet_z = self.z - math.cos(angle_rad) * distance
-
-        bullet_y = self.y + 60
-
-        bullet = Bullet(
-            bullet_x,
-            bullet_y,
-            bullet_z,
-            angle,
-            self.quadric
-        )
-
-        self.bullets.append(bullet)
-        self.muzzle_flash_timer = self.muzzle_flash_duration
-
-    def _fire_grenade(self):
-    
-        angle = self.player_angle
-
-        angle_rad = math.radians(angle)
-
-        distance = 90
-
-        x = self.x - math.sin(angle_rad) * distance
-        z = self.z - math.cos(angle_rad) * distance
-
-        y = self.y + 55
-
-        grenade = Grenade(
-            x,
-            y,
-            z,
-            angle,
-            self.quadric
-        )
-
-        self.grenades.append(grenade)
-        self.muzzle_flash_timer = self.muzzle_flash_duration
-
-    def draw_gun(self):
-        
-        if self.weapon_types[self.weapon_index] == "gun":
-            self._draw_machine_gun()
-        else:
-            self._draw_grenade_launcher()
-
-    def _draw_machine_gun(self):
-
-        glPushMatrix()
-
-        glTranslatef(0, 55, 0)
-
-        glColor3f(0.15, 0.15, 0.15)
-
-        glutSolidCube(35)
-
-        glPopMatrix()
-
-        glPushMatrix()
-
-        glTranslatef(0, 60, 0)
-
-        glRotatef(
-            self.gun_rotation,
-            0,
-            0,
-            1
-        )
-
-        radius = 5
-        w = 20
-
-        for angle in [0, 90, 180, 270]:
-
-            glPushMatrix()
-
-            angle_rad = math.radians(angle)
-
-            x = math.cos(angle_rad) * radius
-            y = math.sin(angle_rad) * radius
-
-            glTranslatef(x, y, 0)
-
-            glRotatef(
-                180,
-                1,
-                0,
-                0
-            )
-
-            for i in range(4):
-
-                if i == 0:
-                    glColor3f(71/255, 195/255, 230/255)
-                elif i == 1:
-                    glColor3f(1, 1, 0)
-                elif i == 2:
-                    glColor3f(0, 0, 0)
-                else:
-                    glColor3f(1, 1, 1)
-                    if self.muzzle_flash_timer > 0:
-                        glColor3f(219/255, 80/255, 61/255)
-
-                glPushMatrix()
-
-                glTranslatef(
-                    0,
-                    0,
-                    i * w
-                )
-
-                gluCylinder(
-                    self.quadric,
-                    2,
-                    2,
-                    w,
-                    10,
-                    10
-                )
-
-                glPopMatrix()
-
-            glPopMatrix()
-
-        glPopMatrix()
-
-    def _draw_grenade_launcher(self):
-    
-        glPushMatrix()
-
-        glTranslatef(0, 55, 0)
-
-        glColor3f(0.2, 0.25, 0.15)
-
-        glutSolidCube(35)
-
-        glPopMatrix()
-
-        glPushMatrix()
-
-        glTranslatef(0, 60, 0)
-
-        glTranslatef(0, 0, -80)
-
-        glColor3f(0.15, 0.2, 0.1)
-
-        if self.muzzle_flash_timer > 0:
-            glColor3f(219/255, 80/255, 61/255)
-
-        gluCylinder(
-            self.quadric,
-            10,
-            10,
-            70,
-            12,
-            12
-        )
-
-        glPopMatrix()
-    
-    def draw_bullets(self):
-        
-        for bullet in self.bullets:
-            bullet.draw()
-
-        for grenade in self.grenades:
-            grenade.draw()
-
-    def draw_car(self):
-
-        glPushMatrix()
-        glTranslatef(
-            self.x,
-            self.y,
-            self.z
-        )
-        glRotatef(
-            self.player_angle,
-            0,
-            1,
-            0
-        )
+    def draw_body(self):
 
         glPushMatrix()
 
         glScalef(1.5, 0.5, 2.0)
 
-        glColor3f(
-            0.05,
-            0.15,
-            0.85
-        )
+        glColor3f(0.05, 0.15, 0.85)
 
         glutSolidCube(60)
 
@@ -404,11 +190,7 @@ class Car:
         glTranslatef(0, 35, 0)
         glScalef(1.0, 0.5, 1.0)
 
-        glColor3f(
-            0.05,
-            0.05,
-            0.05
-        )
+        glColor3f(0.05, 0.05, 0.05)
 
         glutSolidCube(50)
 
@@ -419,11 +201,7 @@ class Car:
         glTranslatef(0, 35, -25)
         glScalef(0.75, 0.5, 0.05)
 
-        glColor3f(
-            0.1,
-            0.4,
-            0.8
-        )
+        glColor3f(0.1, 0.4, 0.8)
 
         glutSolidCube(50)
 
@@ -434,21 +212,13 @@ class Car:
         glTranslatef(0, 5, -63)
         glScalef(1.4, 0.15, 0.15)
 
-        glColor3f(
-            0.02,
-            0.02,
-            0.02
-        )
+        glColor3f(0.02, 0.02, 0.02)
 
         glutSolidCube(60)
 
         glPopMatrix()
 
-        glColor3f(
-            1.0,
-            1.0,
-            0.2
-        )
+        glColor3f(1.0, 1.0, 0.2)
 
         glPushMatrix()
 
@@ -468,122 +238,6 @@ class Car:
 
         glPopMatrix()
 
-        wheel_positions = [
-
-            (-45, -25, -45),
-            (30, -25, -45),
-            (-45, -25, 45),
-            (30, -25, 45)
-
-        ]
-
-        for x, y, z in wheel_positions:
-
-            self.draw_wheel(x, y, z)
-
-        self.draw_text(10, 770, f"Speed {int(abs(self.speed[2]))}")
-        self.draw_text(10, 750, f"Health {self.health}")
-        self.draw_gun()
-
-        glPopMatrix()
-
-    def update(self, keys, collision_check):
-
-        if GLUT_KEY_UP in keys:
-
-            self.speed[2] += self.accelration
-
-            if self.speed[2] > self.max_speed:
-
-                self.speed[2] = self.max_speed
-
-        elif GLUT_KEY_DOWN in keys:
-
-            self.speed[2] -= self.accelration
-
-            if self.speed[2] < -self.max_speed:
-
-                self.speed[2] = -self.max_speed
-
-        else:
-
-            if self.speed[2] > 0:
-
-                self.speed[2] -= self.decelration
-
-                if self.speed[2] < 0:
-
-                    self.speed[2] = 0
-
-            elif self.speed[2] < 0:
-
-                self.speed[2] += self.decelration
-
-                if self.speed[2] > 0:
-
-                    self.speed[2] = 0
-
-        if self.speed[2] < 0:
-
-            if GLUT_KEY_LEFT in keys:
-
-                self.player_angle -= self.turn_speed
-
-            if GLUT_KEY_RIGHT in keys:
-
-                self.player_angle += self.turn_speed
-
-        else:
-
-            if GLUT_KEY_LEFT in keys:
-
-                self.player_angle += self.turn_speed
-
-            if GLUT_KEY_RIGHT in keys:
-
-                self.player_angle -= self.turn_speed
-
-        angle_rad = math.radians(self.player_angle)
-
-        new_x = self.x - math.sin(angle_rad) * self.speed[2]
-        new_z = self.z - math.cos(angle_rad) * self.speed[2]
-
-        flag, coord = collision_check(new_x, new_z)
-
-        if flag:
-
-            # Stop the car
-            current_speed =  self.speed[2] 
-            self.speed[2] = 0
-
-            # Damage only when entering the collision
-            if not self.was_colliding:
-                self.health = max(0, self.health - int(20 * current_speed / self.max_speed))
-
-            self.was_colliding = True
-
-        else:
-
-            # Car is no longer touching an obstacle
-            self.was_colliding = False
-
-            self.x = new_x
-            self.z = new_z
-
-        self.y += self.speed[1]
-        self.gun_rotation += 5
-        for bullet in self.bullets:
-            bullet.update()
-
-        for grenade in self.grenades:
-            grenade.update()
-
-        self.bullets = [b for b in self.bullets if b.alive]
-        self.grenades = [g for g in self.grenades if g.alive]
-
-        if self.muzzle_flash_timer > 0:
-            self.muzzle_flash_timer -= 1
-
     def draw_circle_cap(self, z, radius=15):
 
         segments = 15
@@ -596,46 +250,27 @@ class Car:
 
         for i in range(segments + 1):
 
-            angle = (
-                2 * math.pi
-                * i / segments
-            )
+            angle = 2 * math.pi * i / segments
 
             x = radius * math.cos(angle)
             y = radius * math.sin(angle)
 
             if i % spoke_every == 0:
-
                 glColor3f(0.0, 0.0, 0.0)
-
             else:
-
                 glColor3f(0.7, 0.7, 0.7)
 
             glVertex3f(x, y, z)
 
         glEnd()
 
-    def show_car(self):
-        self.draw_car()
-        self.draw_bullets()
-
     def draw_wheel(self, x, y, z):
 
         glPushMatrix()
 
-        glTranslatef(
-            x,
-            y,
-            z
-        )
+        glTranslatef(x, y, z)
 
-        glRotatef(
-            90,
-            0,
-            1,
-            0
-        )
+        glRotatef(90, 0, 1, 0)
 
         glRotatef(
             self.wheel_spin_angle,
@@ -644,11 +279,7 @@ class Car:
             1
         )
 
-        glColor3f(
-            0.02,
-            0.02,
-            0.02
-        )
+        glColor3f(0.02, 0.02, 0.02)
 
         gluCylinder(
             self.quadric,
@@ -664,31 +295,450 @@ class Car:
 
         glPopMatrix()
 
+    def draw_extras(self):
+        pass   
+
+    def draw_car(self):
+
+        glPushMatrix()
+
+        glTranslatef(self.x, self.y, self.z)
+        glRotatef(self.angle, 0, 1, 0)
+
+        self.draw_body()
+
+        for wx, wy, wz in self.wheel_positions:
+            self.draw_wheel(wx, wy, wz)
+
+        self.draw_extras()
+
+        glPopMatrix()
+    
+
+    def _draw_machine_gun(self):
+        
+        glPushMatrix()
+        glTranslatef(0, 55, 0)
+        glColor3f(0.15, 0.15, 0.15)
+        glutSolidCube(35)
+        glPopMatrix()
+
+        glPushMatrix()
+        glTranslatef(0, 60, 0)
+        glRotatef(self.gun_rotation, 0, 0, 1)
+
+        radius = 5
+        w = 20
+
+        for angle in [0, 90, 180, 270]:
+
+            glPushMatrix()
+
+            angle_rad = math.radians(angle)
+            x = math.cos(angle_rad) * radius
+            y = math.sin(angle_rad) * radius
+
+            glTranslatef(x, y, 0)
+            glRotatef(180, 1, 0, 0)
+
+            for i in range(4):
+
+                if i == 0:
+                    glColor3f(71/255, 195/255, 230/255)
+                elif i == 1:
+                    glColor3f(1, 1, 0)
+                elif i == 2:
+                    glColor3f(0, 0, 0)
+                else:
+                    glColor3f(1, 1, 1)
+                    if self.muzzle_flash_timer > 0:
+                        glColor3f(219/255, 80/255, 61/255)
+
+                glPushMatrix()
+                glTranslatef(0, 0, i * w)
+
+                gluCylinder(self.quadric, 2, 2, w, 10, 10)
+
+                glPopMatrix()
+
+            glPopMatrix()
+
+        glPopMatrix()
+
+class EnemyCar(BaseCar):
+    
+    def __init__(self, x, z, quadric):
+
+        super().__init__(x, 40, z, quadric)
+
+        self.move_speed = 5
+        self.alive = True
+        self.close_to_player =1000
+
+
+    def update(self, player_x, player_z):
+
+        detect_radius=CHUNK_COUNT * CHUNK_SIZE
+
+        dx = player_x - self.x
+        dz = player_z - self.z
+
+        dist = math.hypot(dx, dz)
+
+        if dist < detect_radius :
+
+            self.angle = math.degrees(math.atan2(-dx, -dz))
+            if  dist > self.close_to_player:
+                angle_rad = math.radians(self.angle)
+
+                self.x -= math.sin(angle_rad) * self.move_speed
+                self.z -= math.cos(angle_rad) * self.move_speed
+
+                self.wheel_spin_angle += self.move_speed
+        self.gun_rotation += 5
+
+    def draw_extras(self):
+        self._draw_machine_gun()
+    
+    def draw_body(self):
+        # return super().draw_body()
+        glPushMatrix()
+
+        glScalef(1.5, 0.5, 2.0)
+
+        glColor3f(128/255, 26/255, 19/255)
+
+        glutSolidCube(60)
+
+        glPopMatrix()
+
+        glPushMatrix()
+
+        glTranslatef(0, 35, 0)
+        glScalef(1.0, 0.5, 1.0)
+
+        glColor3f(0.05, 0.05, 0.05)
+
+        glutSolidCube(50)
+
+        glPopMatrix()
+
+        glPushMatrix()
+
+        glTranslatef(0, 35, -25)
+        glScalef(0.75, 0.5, 0.05)
+
+        glColor3f(0.1, 0.4, 0.8)
+
+        glutSolidCube(50)
+
+        glPopMatrix()
+
+        glPushMatrix()
+
+        glTranslatef(0, 5, -63)
+        glScalef(1.4, 0.15, 0.15)
+
+        glColor3f(0.02, 0.02, 0.02)
+
+        glutSolidCube(60)
+
+        glPopMatrix()
+
+        glColor3f(1.0, 1.0, 0.2)
+
+        glPushMatrix()
+
+        glTranslatef(-35, 10, -60)
+        glScalef(0.3, 0.25, 0.15)
+
+        glutSolidCube(60)
+
+        glPopMatrix()
+
+        glPushMatrix()
+
+        glTranslatef(35, 10, -60)
+        glScalef(0.3, 0.25, 0.15)
+
+        glutSolidCube(60)
+
+        glPopMatrix()
+    
+
+    
+class PlayerCar(BaseCar):
+    
+    def __init__(self, x, y, z, quadric):
+
+        super().__init__(x, y, z, quadric)
+
+        self.speed = [0, 0, 0]
+
+        self.accelration = 0.07
+        self.decelration = 0.2
+        self.max_speed = 30
+        self.turn_speed = 3
+
+        self.health = 100
+        self.was_colliding = False
+
+     
+        self.bullets = []
+     
+
+        self.grenades = []
+        self.weapon_types = ["gun", "grenade"]
+        self.weapon_index = 0
+
+    def switch_weapon(self):
+        self.weapon_index = 1 - self.weapon_index
+
+    def fire_bullet(self):
+        if self.weapon_types[self.weapon_index] == "gun":
+            self._fire_gun()
+        else:
+            self._fire_grenade()
+
+    def _fire_gun(self):
+
+        angle_rad = math.radians(self.angle)
+        distance = 110
+
+        bullet_x = self.x - math.sin(angle_rad) * distance
+        bullet_z = self.z - math.cos(angle_rad) * distance
+        bullet_y = self.y + 60
+
+        self.bullets.append(
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, self.quadric)
+        )
+
+        self.muzzle_flash_timer = self.muzzle_flash_duration
+
+    def _fire_grenade(self):
+
+        angle_rad = math.radians(self.angle)
+        distance = 90
+
+        x = self.x - math.sin(angle_rad) * distance
+        z = self.z - math.cos(angle_rad) * distance
+        y = self.y + 55
+
+        self.grenades.append(
+            Grenade(x, y, z, self.angle, self.quadric)
+        )
+
+        self.muzzle_flash_timer = self.muzzle_flash_duration
+
+    def draw_extras(self):
+        self.draw_gun()
+
+    def draw_gun(self):
+        if self.weapon_types[self.weapon_index] == "gun":
+            self._draw_machine_gun()
+        else:
+            self._draw_grenade_launcher()
+
+    
+
+    def _draw_grenade_launcher(self):
+
+        glPushMatrix()
+        glTranslatef(0, 55, 0)
+        glColor3f(0.2, 0.25, 0.15)
+        glutSolidCube(35)
+        glPopMatrix()
+
+        glPushMatrix()
+        glTranslatef(0, 60, 0)
+        glTranslatef(0, 0, -80)
+
+        glColor3f(0.15, 0.2, 0.1)
+
+        if self.muzzle_flash_timer > 0:
+            glColor3f(219/255, 80/255, 61/255)
+
+        gluCylinder(self.quadric, 10, 10, 70, 12, 12)
+
+        glPopMatrix()
+
+    def draw_bullets(self):
+
+        for bullet in self.bullets:
+            bullet.draw()
+
+        for grenade in self.grenades:
+            grenade.draw()
+
+    def draw_health_bar(self, x, y, width, height):
+
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+
+        gluOrtho2D(0, 1000, 0, 800)
+
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        glColor3f(0.2, 0.2, 0.2)
+
+        glBegin(GL_QUADS)
+        glVertex3f(x, y, -0.5)
+        glVertex3f(x + width, y, -0.5)
+        glVertex3f(x + width, y + height, -0.5)
+        glVertex3f(x, y + height, -0.5)
+        glEnd()
+
+        health_ratio = self.health / 100
+        filled_width = width * health_ratio
+
+        if health_ratio > 0.5:
+            glColor3f(0.2, 0.8, 0.2)
+        elif health_ratio > 0.25:
+            glColor3f(0.9, 0.7, 0.1)
+        else:
+            glColor3f(0.9, 0.1, 0.1)
+
+        glBegin(GL_QUADS)
+        glVertex3f(x, y, 0.0)
+        glVertex3f(x + filled_width, y, 0.0)
+        glVertex3f(x + filled_width, y + height, 0.0)
+        glVertex3f(x, y + height, 0.0)
+        glEnd()
+
+        glColor3f(1, 1, 1)
+
+        glBegin(GL_LINE_LOOP)
+        glVertex3f(x, y, 0.5)
+        glVertex3f(x + width, y, 0.5)
+        glVertex3f(x + width, y + height, 0.5)
+        glVertex3f(x, y + height, 0.5)
+        glEnd()
+
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
     def draw_text(self, x, y, text, font=GLUT_BITMAP_HELVETICA_18):
-            glColor3f(1, 1, 1)
-            glMatrixMode(GL_PROJECTION)
-            glPushMatrix()
-            glLoadIdentity()
 
-            # Set up an orthographic projection that matches window coordinates
-            gluOrtho2D(0, 1000, 0, 800)  # left, right, bottom, top
+        glColor3f(1, 1, 1)
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
 
-            glMatrixMode(GL_MODELVIEW)
-            glPushMatrix()
-            glLoadIdentity()
+        gluOrtho2D(0, 1000, 0, 800)
 
-            glRasterPos2f(x, y)
-            for ch in text:
-                glutBitmapCharacter(font, ord(ch))
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
 
-            glPopMatrix()
-            glMatrixMode(GL_PROJECTION)
-            glPopMatrix()
-            glMatrixMode(GL_MODELVIEW)
+        glRasterPos2f(x, y)
+        for ch in text:
+            glutBitmapCharacter(font, ord(ch))
 
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
 
+    def update(self, keys, collision_check):
+
+        if GLUT_KEY_UP in keys:
+
+            self.speed[2] += self.accelration
+            if self.speed[2] > self.max_speed:
+                self.speed[2] = self.max_speed
+
+        elif GLUT_KEY_DOWN in keys:
+
+            self.speed[2] -= self.accelration
+            if self.speed[2] < -self.max_speed:
+                self.speed[2] = -self.max_speed
+
+        else:
+
+            if self.speed[2] > 0:
+                self.speed[2] -= self.decelration
+                if self.speed[2] < 0:
+                    self.speed[2] = 0
+            elif self.speed[2] < 0:
+                self.speed[2] += self.decelration
+                if self.speed[2] > 0:
+                    self.speed[2] = 0
+
+        if self.speed[2] < 0:
+            if GLUT_KEY_LEFT in keys:
+                self.angle -= self.turn_speed
+            if GLUT_KEY_RIGHT in keys:
+                self.angle += self.turn_speed
+        else:
+            if GLUT_KEY_LEFT in keys:
+                self.angle += self.turn_speed
+            if GLUT_KEY_RIGHT in keys:
+                self.angle -= self.turn_speed
+
+        angle_rad = math.radians(self.angle)
+
+        new_x = self.x - math.sin(angle_rad) * self.speed[2]
+        new_z = self.z - math.cos(angle_rad) * self.speed[2]
+
+        flag, coord = collision_check(new_x, new_z)
+
+        if flag:
+
+            current_speed = self.speed[2]
+            self.speed[2] = 0
+
+            if not self.was_colliding:
+                self.health = max(0, self.health - int(20 * current_speed / self.max_speed))
+
+            self.was_colliding = True
+
+        else:
+
+            self.was_colliding = False
+            self.x = new_x
+            self.z = new_z
+
+        self.y += self.speed[1]
+        self.gun_rotation += 5
+
+        for bullet in self.bullets:
+            bullet.update()
+            dx = bullet.x - self.x
+            dz = bullet.z - self.z
+            if math.hypot(dx, dz) > MAX_PROJECTILE_DISTANCE:
+                bullet.alive = False
+
+        for grenade in self.grenades:
+            grenade.update()
+            dx = grenade.x - self.x
+            dz = grenade.z - self.z
+            if math.hypot(dx, dz) > MAX_PROJECTILE_DISTANCE:
+                grenade.alive = False
+
+        self.bullets = [b for b in self.bullets if b.alive]
+        self.grenades = [g for g in self.grenades if g.alive]
+
+        if self.muzzle_flash_timer > 0:
+            self.muzzle_flash_timer -= 1
+
+        self.wheel_spin_angle += self.speed[2]
+
+    def show_car(self):
+
+        self.draw_car()
+
+        self.draw_text(10, 770, f"Speed {int(abs(self.speed[2]))}")
+        self.draw_text(10, 750, "Health")
+        self.draw_health_bar(90, 745, 150, 18)
+
+        self.draw_bullets()
 class CarWarfare:
-
+    
     def __init__(self):
 
         glutInit()
@@ -723,8 +773,8 @@ class CarWarfare:
 
         self.arrow = [0, 0]
         self.chunks = {}
+        self.enemy_cars = {}
 
-        self.generate_world()
 
         self.camera_height = 220
         self.camera_distance = 350
@@ -736,7 +786,8 @@ class CarWarfare:
         quadric = gluNewQuadric()
         self.quadric = quadric
 
-        self.player = Car(0, 40, 0, quadric)
+        self.generate_world()
+        self.player = PlayerCar(0, 40, 0, quadric)
         self.pov = False
         glutSpecialFunc(self.specialKeyDown)
         glutSpecialUpFunc(self.specialKeyUp)
@@ -765,11 +816,10 @@ class CarWarfare:
 
         trees = []
         stones = []
+        enemies = []
 
-        # -----------------------------
-        # Generate trees
-        # -----------------------------
-        if random.random() < 0.5:
+  
+        if random.random() < 0.25:
             for i in range(random.randrange(1, 3, 1)):
 
                 x = ran.uniform(
@@ -794,8 +844,7 @@ class CarWarfare:
             # -----------------------------
             # Generate stones
             # -----------------------------
-        if random.random() < 0.2:
-            for i in range(random.randrange(1, 2, 1)):
+        if random.random() < 0.1:
 
                 x = ran.uniform(
                     -CHUNK_SIZE / 2 + 30,
@@ -814,12 +863,34 @@ class CarWarfare:
                     "z": z,
                     "scale": scale
                 })
+            # -----------------------------
+        if chunk_x != 0 or chunk_z != 0: 
+
+            if ran.random() < 0.01:
+
+
+                x = ran.uniform(
+                    -CHUNK_SIZE / 2 + 60,
+                    CHUNK_SIZE / 2 - 60
+                )
+
+                z = ran.uniform(
+                    -CHUNK_SIZE / 2 + 60,
+                    CHUNK_SIZE / 2 - 60
+                )
+
+                enemies.append({
+                    "x": x,
+                    "z": z
+                })
+                
 
         return {
             "x": chunk_x,
             "z": chunk_z,
             "trees": trees,
-            "stones": stones
+            "stones": stones,
+            "enemies": enemies
         }
 
     def draw_tree(self):
@@ -872,7 +943,27 @@ class CarWarfare:
 
             for z in range(player_chunk_z - half, player_chunk_z + half + 1):
 
-                self.chunks_metadata[(x, z)] = self.generate_chunk(x, z)
+                chunk = self.generate_chunk(x, z)
+                self.chunks_metadata[(x, z)] = chunk
+
+                self.spawn_enemies_for_chunk(x, z, chunk)
+
+
+    def spawn_enemies_for_chunk(self, chunk_x, chunk_z, chunk):
+    
+        world_x = chunk_x * CHUNK_SIZE
+        world_z = chunk_z * CHUNK_SIZE
+
+        car_list = []
+
+        for enemy in chunk["enemies"]:
+
+            ex = world_x + enemy["x"]
+            ez = world_z + enemy["z"]
+
+            car_list.append(EnemyCar(ex, ez, self.quadric))
+
+        self.enemy_cars[(chunk_x, chunk_z)] = car_list
 
     def draw_ground(self):
 
@@ -940,7 +1031,11 @@ class CarWarfare:
 
                 if (x, z) not in self.chunks_metadata:
 
-                    self.chunks_metadata[(x, z)] = self.generate_chunk(x, z)
+
+                    chunk = self.generate_chunk(x, z)
+                    self.chunks_metadata[(x, z)] = chunk
+
+                    self.spawn_enemies_for_chunk(x, z, chunk)
 
 
 
@@ -961,6 +1056,8 @@ class CarWarfare:
         for chunk in chunks_to_remove:
 
             del self.chunks_metadata[chunk]
+            if chunk in self.enemy_cars:
+                del self.enemy_cars[chunk]
 
         return chunk_x, chunk_z
 
@@ -1100,7 +1197,7 @@ class CarWarfare:
 
         if self.pov:
 
-            angle = math.radians(player.player_angle)
+            angle = math.radians(player.angle)
             camera_x = player.x
             camera_y = player.y + 65
             camera_z = player.z
@@ -1136,13 +1233,30 @@ class CarWarfare:
             0
         )
 
+    def update_enemies(self):
+    
+        for car_list in self.enemy_cars.values():
+
+            for enemy in car_list:
+
+                enemy.update(self.player.x, self.player.z)
+
+    def draw_enemies(self):
+
+        for car_list in self.enemy_cars.values():
+
+            for enemy in car_list:
+
+                enemy.draw_car()
+
     def idle(self):
 
         self.player.update(self.keys, collision_check=self.check_collision)
 
         self.update_chunks()
+        self.update_enemies()
 
-        angle_diff = self.player.player_angle - self.camera_angle
+        angle_diff = self.player.angle - self.camera_angle
 
         self.camera_angle += angle_diff * self.camera_smoothing
 
@@ -1169,6 +1283,7 @@ class CarWarfare:
 
         self.draw_world()
 
+        self.draw_enemies()
         self.player.show_car()
    
 
