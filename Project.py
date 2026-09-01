@@ -15,6 +15,21 @@ CHUNK_COUNT = 16
 TREE_RADIUS = 40
 STONE_RADIUS = 35
 MAX_PROJECTILE_DISTANCE = (CHUNK_COUNT // 2) * CHUNK_SIZE
+
+# ---------------- Nitrous / Pickup constants ----------------
+NITROUS_PICKUP_RADIUS = 25
+NITROUS_BOOST_COST = 10
+NITROUS_BOOST_DURATION = 45
+NITROUS_SPEED_BOOST = 40
+NITROUS_ACCEL_BOOST = 0.25
+
+BONUS_COIN_RADIUS = 30
+BONUS_COIN_VALUE = 50
+BONUS_COIN_MIN_LIFETIME = 300
+BONUS_COIN_MAX_LIFETIME = 600
+BONUS_COIN_RESPAWN_MIN = 180
+BONUS_COIN_RESPAWN_MAX = 420
+
 class Projectile:
     def __init__(self, x, y, z, angle, quadric):
         self.x = x
@@ -59,6 +74,7 @@ class Grenade(Projectile):
         self.exploded = False
         self.explosion_timer = 0
         self.explosion_duration = 7
+        self.damage_applied = False
 
     def update(self):
 
@@ -442,6 +458,84 @@ class EnemyCar(BaseCar):
         if self.muzzle_flash_timer > 0:
             self.muzzle_flash_timer -= 1
 
+    def draw_health_bar_3d(self, camera_x, camera_z):
+        
+        if not self.alive:
+            return
+
+        width = 70
+        height = 8
+
+        x = self.x
+        y = self.y + 150
+        z = self.z
+
+        # Face the camera
+        dx = camera_x - x
+        dz = camera_z - z
+        distance = math.hypot(dx, dz)
+
+        if distance == 0:
+            distance = 1
+
+        right_x = dz / distance
+        right_z = -dx / distance
+
+        health = max(0, self.health) / 100
+
+        if health > 0.5:
+            color = (0.2, 0.8, 0.2)
+        elif health > 0.25:
+            color = (0.9, 0.7, 0.1)
+        else:
+            color = (0.9, 0.1, 0.1)
+
+        # Background
+        glColor3f(0.05, 0.05, 0.05)
+
+        glBegin(GL_QUADS)
+
+        glVertex3f(x - right_x * width/2, y - height/2, z - right_z * width/2)
+        glVertex3f(x + right_x * width/2, y - height/2, z + right_z * width/2)
+        glVertex3f(x + right_x * width/2, y + height/2, z + right_z * width/2)
+        glVertex3f(x - right_x * width/2, y + height/2, z - right_z * width/2)
+
+        glEnd()
+
+        # Health
+        health_width = width * health
+        offset = (width - health_width) / 2
+
+        glColor3f(*color)
+
+        glBegin(GL_QUADS)
+
+        glVertex3f(
+            x - right_x * width/2,
+            y - height/2,
+            z - right_z * width/2
+        )
+
+        glVertex3f(
+            x + right_x * (health_width - width/2),
+            y - height/2,
+            z + right_z * (health_width - width/2)
+        )
+
+        glVertex3f(
+            x + right_x * (health_width - width/2),
+            y + height/2,
+            z + right_z * (health_width - width/2)
+        )
+
+        glVertex3f(
+            x - right_x * width/2,
+            y + height/2,
+            z - right_z * width/2
+        )
+
+        glEnd()
+
     def draw_extras(self):
         self._draw_machine_gun()
         for bullet in self.bullets:
@@ -520,7 +614,7 @@ class EnemyCar(BaseCar):
 
         for bullet in self.bullets:
             bullet.draw()
-        
+            
     
 class PlayerCar(BaseCar):
     
@@ -530,6 +624,7 @@ class PlayerCar(BaseCar):
 
         self.speed = [0, 0, 0]
 
+        self.score = 0
         self.accelration = 0.07
         self.decelration = 0.2
         self.max_speed = 30
@@ -537,6 +632,15 @@ class PlayerCar(BaseCar):
 
         self.health = 100
         self.was_colliding = False
+
+        # ---------------- Nitrous ----------------
+        self.nitrous = 0
+        self.max_nitrous = 100
+        self.nitrous_active = False
+        self.nitrous_boost_timer = 0
+        self.nitrous_speed_boost = NITROUS_SPEED_BOOST
+        self.nitrous_accel_boost = NITROUS_ACCEL_BOOST
+
 
      
         self.bullets = []
@@ -630,6 +734,42 @@ class PlayerCar(BaseCar):
         for grenade in self.grenades:
             grenade.draw()
 
+    def draw_nitrous_bar(self, x, y, width, height):
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluOrtho2D(0, 1000, 0, 800)
+
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        # glColor3f(0.2, 0.2, 0.2)
+        # glBegin(GL_QUADS)
+        # glVertex2f(x, y)
+        # glVertex2f(x + width, y)
+        # glVertex2f(x + width, y + height)
+        # glVertex2f(x, y + height)
+        # glEnd()
+
+        fill_width = width * (self.nitrous / self.max_nitrous)
+        if self.nitrous_active:
+            glColor3f(0.3, 0.6, 1.0)
+        else:
+            glColor3f(0.1, 0.35, 0.85)
+
+        # glBegin(GL_QUADS)
+        # glVertex2f(x, y)
+        # glVertex2f(x + fill_width, y)
+        # glVertex2f(x + fill_width, y + height)
+        # glVertex2f(x, y + height)
+        # glEnd()
+
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
     def draw_health_bar(self, x, y, width, height):
 
         glMatrixMode(GL_PROJECTION)
@@ -682,9 +822,9 @@ class PlayerCar(BaseCar):
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
 
-    def draw_text(self, x, y, text, font=GLUT_BITMAP_HELVETICA_18):
+    def draw_text(self, x, y, text, font=GLUT_BITMAP_HELVETICA_18, color=(1, 1, 1)):
 
-        glColor3f(1, 1, 1)
+        glColor3f(*color)
         glMatrixMode(GL_PROJECTION)
         glPushMatrix()
         glLoadIdentity()
@@ -705,17 +845,31 @@ class PlayerCar(BaseCar):
         glMatrixMode(GL_MODELVIEW)
 
     def update(self, keys, collision_check):
+        # ---------------- Nitrous ----------------
+        if self.nitrous_boost_timer > 0:
+            self.nitrous_boost_timer -= 1
+            self.nitrous_active = True
+        else:
+            self.nitrous_active = False
+
+        if self.nitrous_active:
+            current_accel = self.accelration + self.nitrous_accel_boost
+            current_max_speed = self.max_speed + self.nitrous_speed_boost
+        else:
+            current_accel = self.accelration
+            current_max_speed = self.max_speed
+
 
         if GLUT_KEY_UP in keys:
 
-            self.speed[2] += self.accelration
-            if self.speed[2] > self.max_speed:
+            self.speed[2] += current_accel
+            if self.speed[2] > current_max_speed:
                 self.speed[2] = self.max_speed
 
         elif GLUT_KEY_DOWN in keys:
 
-            self.speed[2] -= self.accelration
-            if self.speed[2] < -self.max_speed:
+            self.speed[2] -= current_accel
+            if self.speed[2] < -current_max_speed:
                 self.speed[2] = -self.max_speed
 
         else:
@@ -793,10 +947,14 @@ class PlayerCar(BaseCar):
     def show_car(self):
 
         self.draw_car()
-
         self.draw_text(10, 770, f"Speed {int(abs(self.speed[2]))}")
         self.draw_text(10, 750, "Health")
+        self.draw_text(10, 730, f"Score {self.score}")
+        self.draw_text(10, 710, f"Nitrous {int(self.nitrous)}%")
+
         self.draw_health_bar(90, 745, 150, 18)
+        self.draw_nitrous_bar(90, 710, 150, 14)
+
 
         self.draw_bullets()
 class CarWarfare:
@@ -851,9 +1009,18 @@ class CarWarfare:
         self.generate_world()
         self.player = PlayerCar(0, 40, 0, quadric)
         self.pov = False
+
+        self.nitrous_refill_amount = 25
+        self.nitrous_pickup_points = 10
+        self.popups = []
+        self.bonus_coin = None
+        self.bonus_coin_spawn_timer = 120
+        self.bonus_coin_spin_angle = 0.0
+
         glutSpecialFunc(self.specialKeyDown)
         glutSpecialUpFunc(self.specialKeyUp)
         glutKeyboardFunc(self.keyboardListener)
+        glutKeyboardUpFunc(self.keyboardUpListener)
 
         glutDisplayFunc(
             self.showScreen
@@ -879,6 +1046,21 @@ class CarWarfare:
         trees = []
         stones = []
         enemies = []
+
+        # -----------------------------
+        # Generate nitrous pickups
+        # -----------------------------
+        nitrous_orbs = []
+        if ran.random() < 0.1:
+            for i in range(ran.randrange(1, 3)):
+                x = ran.uniform(-CHUNK_SIZE / 2 + 30, CHUNK_SIZE / 2 - 30)
+                z = ran.uniform(-CHUNK_SIZE / 2 + 30, CHUNK_SIZE / 2 - 30)
+                nitrous_orbs.append({
+                    "x": x,
+                    "z": z,
+                    "collected": False
+                })
+
 
   
         if random.random() < 0.25:
@@ -952,7 +1134,8 @@ class CarWarfare:
             "z": chunk_z,
             "trees": trees,
             "stones": stones,
-            "enemies": enemies
+            "enemies": enemies,
+            "nitrous_orbs": nitrous_orbs
         }
 
     def draw_tree(self):
@@ -991,6 +1174,12 @@ class CarWarfare:
 
         glutSolidSphere(25, 10, 10)
 
+        glPopMatrix()
+
+    def draw_nitrous_orb(self):
+        glPushMatrix()
+        glColor3f(0.2, 0.5, 1.0)
+        glutSolidSphere(12, 12, 12)
         glPopMatrix()
 
     def generate_world(self):
@@ -1168,6 +1357,100 @@ class CarWarfare:
         for chunk_key, car_list in self.enemy_cars.items():
             self.enemy_cars[chunk_key] = [e for e in car_list if e.alive]
 
+    def spawn_popup(self, text, color=(1, 1, 1)):
+        self.popups.append({
+            "text": text,
+            "x": 170,
+            "y": 705,
+            "timer": 40,
+            "color": color
+        })
+
+    def trigger_nitrous_boost(self):
+        if self.player.nitrous >= NITROUS_BOOST_COST:
+            self.player.nitrous -= NITROUS_BOOST_COST
+            self.player.nitrous_boost_timer = NITROUS_BOOST_DURATION
+            self.spawn_popup("-10", color=(1.0, 0.3, 0.3))
+        else:
+            self.spawn_popup("Low Nitrous!", color=(1.0, 0.6, 0.0))
+
+    def spawn_bonus_coin(self):
+        angle = random.uniform(0, 2 * math.pi)
+        dist = random.uniform(200, 600)
+        self.bonus_coin = {
+            "x": self.player.x + math.cos(angle) * dist,
+            "z": self.player.z + math.sin(angle) * dist,
+            "timer": random.randint(BONUS_COIN_MIN_LIFETIME, BONUS_COIN_MAX_LIFETIME)
+        }
+
+    def update_bonus_coin(self):
+        self.bonus_coin_spin_angle += 4
+
+        if self.bonus_coin is None:
+            self.bonus_coin_spawn_timer -= 1
+            if self.bonus_coin_spawn_timer <= 0:
+                self.spawn_bonus_coin()
+            return
+
+        self.bonus_coin["timer"] -= 1
+        dist = math.hypot(
+            self.player.x - self.bonus_coin["x"],
+            self.player.z - self.bonus_coin["z"]
+        )
+
+        if dist < self.player.radius + BONUS_COIN_RADIUS:
+            self.player.score += BONUS_COIN_VALUE
+            self.spawn_popup(f"+{BONUS_COIN_VALUE}", color=(1.0, 0.85, 0.0))
+            self.bonus_coin = None
+            self.bonus_coin_spawn_timer = random.randint(BONUS_COIN_RESPAWN_MIN, BONUS_COIN_RESPAWN_MAX)
+        elif self.bonus_coin["timer"] <= 0:
+            self.bonus_coin = None
+            self.bonus_coin_spawn_timer = random.randint(BONUS_COIN_RESPAWN_MIN, BONUS_COIN_RESPAWN_MAX)
+
+    def draw_bonus_coin(self):
+        if self.bonus_coin is None:
+            return
+
+        if self.bonus_coin["timer"] < 60 and (self.bonus_coin["timer"] // 5) % 2 == 0:
+            return
+
+        glPushMatrix()
+        glTranslatef(self.bonus_coin["x"], 30, self.bonus_coin["z"])
+        glRotatef(self.bonus_coin_spin_angle, 0, 1, 0)
+        glColor3f(1.0, 0.85, 0.0)
+        glScalef(1.0, 1.0, 0.25)
+        glutSolidSphere(18, 14, 14)
+        glPopMatrix()
+
+    def check_nitrous_pickup(self):
+        player_chunk_x, player_chunk_z = self.get_player_chunk()
+
+        for dx in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                chunk = self.chunks_metadata.get((player_chunk_x + dx, player_chunk_z + dz))
+                if chunk is None:
+                    continue
+
+                world_x = chunk["x"] * CHUNK_SIZE
+                world_z = chunk["z"] * CHUNK_SIZE
+
+                for orb in chunk.get("nitrous_orbs", []):
+                    if orb["collected"]:
+                        continue
+
+                    ox = world_x + orb["x"]
+                    oz = world_z + orb["z"]
+                    dist = math.hypot(self.player.x - ox, self.player.z - oz)
+
+                    if dist < self.player.radius + NITROUS_PICKUP_RADIUS:
+                        orb["collected"] = True
+                        self.player.nitrous = min(
+                            self.player.max_nitrous,
+                            self.player.nitrous + self.nitrous_refill_amount
+                        )
+                        self.player.score += self.nitrous_pickup_points
+                        self.spawn_popup("+10", color=(0.3, 1.0, 0.3))
+
     def draw_world(self):
 
         for key, chunk in self.chunks_metadata.items():
@@ -1242,7 +1525,20 @@ class CarWarfare:
 
                 glPopMatrix()
 
+            # -----------------------------
+            # Draw nitrous pickups
+            # -----------------------------
+            for orb in chunk.get("nitrous_orbs", []):
+                if orb["collected"]:
+                    continue
+                glPushMatrix()
+                glTranslatef(orb["x"], 20, orb["z"])
+                self.draw_nitrous_orb()
+                glPopMatrix()
+
             glPopMatrix()
+
+        self.draw_bonus_coin()
 
     def setupCamera(self):
 
@@ -1264,13 +1560,17 @@ class CarWarfare:
         if self.pov:
 
             angle = math.radians(player.angle)
-            camera_x = player.x
-            camera_y = player.y + 65
-            camera_z = player.z
+            forward_x = -math.sin(angle)
+            forward_z = -math.cos(angle)
 
-            target_x = camera_x - math.sin(angle) * 100
-            target_y = camera_y
-            target_z = camera_z - math.cos(angle) * 100
+            # Sit above and slightly behind the gun mount instead of inside it
+            camera_x = player.x - forward_x * 25
+            camera_y = player.y + 100
+            camera_z = player.z - forward_z * 25
+
+            target_x = camera_x + forward_x * 150
+            target_y = camera_y - 15
+            target_z = camera_z + forward_z * 150
 
         else:
 
@@ -1283,6 +1583,7 @@ class CarWarfare:
             target_x = player.x
             target_y = player.y
             target_z = player.z
+        self.camera_x, self.camera_y, self.camera_z = camera_x, camera_y, camera_z
 
         gluLookAt(
 
@@ -1331,15 +1632,31 @@ class CarWarfare:
 
                         if enemy.health <= 0:
                             enemy.alive = False
+                            self.player.score += 100
 
                         break
+
         GRENADE_BLAST_RADIUS = 150
         GRENADE_MAX_DAMAGE = 50
 
         for grenade in self.player.grenades:
 
-            if not grenade.exploded:
+            # Only apply splash damage once, at the moment of detonation -
+            # not on every frame the fireball is visible.
+            if not grenade.exploded or grenade.damage_applied:
                 continue
+
+            grenade.damage_applied = True
+
+            # --- Damage to the player (self-damage if too close) ---
+            pdx = grenade.x - self.player.x
+            pdz = grenade.z - self.player.z
+            pdist = math.hypot(pdx, pdz)
+
+            if pdist < GRENADE_BLAST_RADIUS:
+                falloff = 1 - (pdist / GRENADE_BLAST_RADIUS)
+                damage = GRENADE_MAX_DAMAGE * falloff
+                self.player.health = max(0, self.player.health - damage)
 
             for car_list in self.enemy_cars.values():
 
@@ -1357,10 +1674,13 @@ class CarWarfare:
 
                         falloff = 1 - (dist / GRENADE_BLAST_RADIUS)
                         damage = GRENADE_MAX_DAMAGE * falloff
-                        print(enemy.health)
 
                         enemy.health -= damage
-                        enemy.alive = enemy.health > 0
+                        if enemy.health <= 0:
+
+                            self.player.score += 100
+                            enemy.alive = False
+        
 
         for car_list in self.enemy_cars.values():
 
@@ -1384,10 +1704,27 @@ class CarWarfare:
         for car_list in self.enemy_cars.values():
             for enemy in car_list:
                 enemy.draw()
-
+                enemy.draw_health_bar_3d(
+                                    self.camera_x,
+                                    self.camera_z
+                                )
+                
+        # for car_list in self.enemy_cars.values():
+        #     for enemy in car_list:
+               
     def idle(self):
 
         self.player.update(self.keys, collision_check=self.check_collision)
+
+        self.check_nitrous_pickup()
+        self.update_bonus_coin()
+
+        for popup in self.popups:
+            popup["y"] += 0.6
+            popup["timer"] -= 1
+
+        self.popups = [p for p in self.popups if p["timer"] > 0]
+
 
         self.update_chunks()
         self.update_enemies()
@@ -1424,6 +1761,23 @@ class CarWarfare:
 
         self.draw_enemies()
         self.player.show_car()
+
+        if self.bonus_coin is not None:
+            seconds_left = self.bonus_coin["timer"] // 60 + 1
+            self.player.draw_text(
+                10, 665,
+                f"Bonus Coin! {seconds_left}s",
+                color=(1.0, 0.85, 0.0)
+            )
+
+        for popup in self.popups:
+            self.player.draw_text(
+                popup["x"],
+                popup["y"],
+                popup["text"],
+                color=popup["color"]
+            )
+
    
 
         glutSwapBuffers()
@@ -1452,6 +1806,15 @@ class CarWarfare:
             self.player.switch_weapon()
         elif key == b'f':
             self.player.fire_bullet()
+        elif key == b' ':
+            if b' ' not in self.keys:
+                self.trigger_nitrous_boost()
+            self.keys.add(b' ')
+
+    def keyboardUpListener(self, key, x, y):
+        if key in self.keys:
+            self.keys.remove(key)
+
         
 
 
