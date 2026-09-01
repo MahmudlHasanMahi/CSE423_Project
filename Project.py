@@ -34,6 +34,11 @@ SHRINK_RATE = 0.0005
 GROWTH_AMOUNT = 0.1
 MIN_SCALE = 0.3
 
+# ---------------- Blast Wave constants ----------------
+BLAST_WAVE_DISTANCE_COST = 100
+BLAST_WAVE_RANGE = 800
+BLAST_WAVE_DURATION = 30
+
 class Projectile:
     def __init__(self, x, y, z, angle, damage, quadric):
         self.x = x
@@ -498,6 +503,12 @@ class PlayerCar(BaseCar):
         self.nitrous_speed_boost = NITROUS_SPEED_BOOST
         self.nitrous_accel_boost = NITROUS_ACCEL_BOOST
 
+        # ---------------- Blast Wave ----------------
+        self.distance_traveled = 0.0
+        self.blast_wave_charges = 0
+        self.blast_wave_active = False
+        self.blast_wave_timer = 0
+
         self.bullets = []
         self.grenades = []
         self.weapon_types = ["gun", "grenade"]
@@ -539,6 +550,43 @@ class PlayerCar(BaseCar):
         y = self.y + 55
         self.grenades.append(Grenade(x, y, z, self.angle, 50, self.quadric))
         self.muzzle_flash_timer = self.muzzle_flash_duration
+
+    def trigger_blast_wave(self):
+        if self.blast_wave_charges > 0 and not self.blast_wave_active:
+            self.blast_wave_charges -= 1
+            self.blast_wave_active = True
+            self.blast_wave_timer = BLAST_WAVE_DURATION
+            return True
+        return False
+
+    def draw_blast_wave(self):
+        if not self.blast_wave_active:
+            return
+
+        t = 1.0 - (self.blast_wave_timer / BLAST_WAVE_DURATION)
+        current_radius = t * BLAST_WAVE_RANGE
+
+        glPushMatrix()
+        glTranslatef(self.x, self.y + 30, self.z)
+
+        # Outer expanding ring — bright red, wireframe
+        glLineWidth(3.0)
+        intensity = max(0.0, 1.0 - t)
+        glColor3f(1.0, intensity * 0.15, 0.0)
+        glutWireSphere(current_radius, 28, 20)
+
+        # Second inner ring — orange glow, slightly smaller
+        inner_radius = max(0, current_radius - 60)
+        glColor3f(1.0, 0.35 * intensity, 0.0)
+        glutWireSphere(inner_radius, 22, 16)
+
+        # Core flash — solid red sphere that shrinks as wave expands
+        core_radius = max(0, (1.0 - t) * 120)
+        glColor3f(1.0, 0.1, 0.0)
+        glutSolidSphere(core_radius, 16, 16)
+
+        glLineWidth(1.0)
+        glPopMatrix()
 
     def draw_extras(self):
         self.draw_gun()
@@ -710,12 +758,25 @@ class PlayerCar(BaseCar):
                 self.health = max(0, self.health - int(20 * current_speed / self.max_speed))
             self.was_colliding = True
         else:
+            # Track distance for blast wave charges
+            dist_moved = math.hypot(new_x - self.x, new_z - self.z)
+            self.distance_traveled += dist_moved
+            while self.distance_traveled >= BLAST_WAVE_DISTANCE_COST:
+                self.distance_traveled -= BLAST_WAVE_DISTANCE_COST
+                self.blast_wave_charges += 1
+
             self.was_colliding = False
             self.x = new_x
             self.z = new_z
 
         self.y += self.speed[1]
         self.gun_rotation += 5
+
+        # Update blast wave animation
+        if self.blast_wave_active:
+            self.blast_wave_timer -= 1
+            if self.blast_wave_timer <= 0:
+                self.blast_wave_active = False
 
         for bullet in self.bullets:
             bullet.update()
@@ -753,10 +814,13 @@ class PlayerCar(BaseCar):
         self.draw_text(10, 730, f"Score {self.score}")
         self.draw_text(10, 710, f"Nitrous {int(self.nitrous)}%")
         self.draw_text(10, 690, f"Size {int(self.scale * 100)}%")
+        self.draw_text(10, 670, f"Blast Wave [B]: {self.blast_wave_charges}", 
+                       color=(1.0, 0.3, 0.2) if self.blast_wave_charges > 0 else (0.5, 0.5, 0.5))
 
         self.draw_health_bar(90, 745, 150, 18)
         self.draw_nitrous_bar(90, 710, 150, 14)
         self.draw_bullets()
+        self.draw_blast_wave()
 
     def increment_score(self, score):
         self.score += score
@@ -1071,6 +1135,28 @@ class CarWarfare:
             self.spawn_popup("-10", color=(1.0, 0.3, 0.3))
         else:
             self.spawn_popup("Low Nitrous!", color=(1.0, 0.6, 0.0))
+
+    def apply_blast_wave(self):
+        kills = 0
+        for car_list in self.enemy_cars.values():
+            for enemy in car_list:
+                if not enemy.alive:
+                    continue
+                dx = enemy.x - self.player.x
+                dz = enemy.z - self.player.z
+                dist = math.hypot(dx, dz)
+                if dist < BLAST_WAVE_RANGE:
+                    enemy.alive = False
+                    enemy.health = 0
+                    kills += 1
+                    if isinstance(enemy, StrongEnemyCar):
+                        self.player.increment_score(250)
+                    else:
+                        self.player.increment_score(100)
+        if kills > 0:
+            self.spawn_popup(f"BLAST WAVE! x{kills}", color=(1.0, 0.2, 0.0))
+        else:
+            self.spawn_popup("BLAST WAVE!", color=(1.0, 0.2, 0.0))
 
     def spawn_bonus_coin(self):
         angle = random.uniform(0, 2 * math.pi)
@@ -1763,6 +1849,11 @@ class CarWarfare:
             self.weather = (self.weather + 1) % 3
         elif key == b'f':
             self.player.fire_bullet()
+        elif key == b'b':
+            if self.player.trigger_blast_wave():
+                self.apply_blast_wave()
+            else:
+                self.spawn_popup("No Blast Wave!", color=(0.5, 0.5, 0.5))
         elif key == b' ':
             if b' ' not in self.keys:
                 self.trigger_nitrous_boost()
