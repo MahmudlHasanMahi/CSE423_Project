@@ -31,10 +31,11 @@ BONUS_COIN_RESPAWN_MIN = 180
 BONUS_COIN_RESPAWN_MAX = 420
 
 class Projectile:
-    def __init__(self, x, y, z, angle, quadric):
+    def __init__(self, x, y, z, angle, damage,quadric):
         self.x = x
         self.y = y
         self.z = z
+        self.damage = damage
 
         self.angle = angle
         self._speed = 75
@@ -58,9 +59,9 @@ class Projectile:
 
 class Grenade(Projectile):
     
-    def __init__(self, x, y, z, angle, quadric):
+    def __init__(self, x, y, z, angle, damage,quadric):
 
-        super().__init__(x, y, z, angle, quadric)
+        super().__init__(x, y, z, angle, damage, quadric)
 
         angle_rad = math.radians(angle)
 
@@ -135,8 +136,8 @@ class Grenade(Projectile):
         glPopMatrix()
 class Bullet(Projectile):
     
-    def __init__(self, x, y, z, angle, quadric):
-        super().__init__(x, y, z, angle, quadric)
+    def __init__(self, x, y, z, angle, damage, quadric):
+        super().__init__(x, y, z, angle, damage, quadric)
         
 
     def draw(self):
@@ -387,16 +388,17 @@ class EnemyCar(BaseCar):
 
         super().__init__(x, 40, z, quadric)
 
+
         self.move_speed = 5
         self.alive = True
-        self.close_to_player =1000
+        self.close_to_player = 1000
 
         self.health = 100
 
         self.bullets = []
         self.fire_range = 1000 
-        self.fire_rate = 40        
-        self.fire_delay= 0
+        self.fire_rate  = 70
+        self.fire_delay = 0
 
 
     def fire_bullet(self):
@@ -409,7 +411,7 @@ class EnemyCar(BaseCar):
         bullet_y = self.y + 60
 
         self.bullets.append(
-            Bullet(bullet_x, bullet_y, bullet_z, self.angle, self.quadric)
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 2 ,self.quadric)
         )
 
         self.muzzle_flash_timer = self.muzzle_flash_duration
@@ -541,13 +543,13 @@ class EnemyCar(BaseCar):
         for bullet in self.bullets:
                     bullet.draw()
     
-    def draw_body(self):
+    def draw_body(self,color=(128/255, 26/255, 19/255)):
         # return super().draw_body()
         glPushMatrix()
 
         glScalef(1.5, 0.5, 2.0)
 
-        glColor3f(128/255, 26/255, 19/255)
+        glColor3f(*color)
 
         glutSolidCube(60)
 
@@ -615,7 +617,35 @@ class EnemyCar(BaseCar):
         for bullet in self.bullets:
             bullet.draw()
             
+
+class StrongEnemyCar(EnemyCar):
+    def __init__(self, x, z, quadric):
+        super().__init__(x, z, quadric)
+        self.move_speed = 10
+        self.fire_rate  = 20
+
+    def draw_body(self, ):
+        color=(157 / 255, 0 / 255, 1)
+        return super().draw_body(color)
+    def fire_bullet(self):
+        
+        angle_rad = math.radians(self.angle)
+        distance = 70
+
+        bullet_x = self.x - math.sin(angle_rad) * distance
+        bullet_z = self.z - math.cos(angle_rad) * distance
+        bullet_y = self.y + 60
+
+        self.bullets.append(
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 8 ,self.quadric)
+        )
+
+        self.muzzle_flash_timer = self.muzzle_flash_duration
     
+
+
+
+
 class PlayerCar(BaseCar):
     
     def __init__(self, x, y, z, quadric):
@@ -652,6 +682,10 @@ class PlayerCar(BaseCar):
         self.grenade_cooldown = 0
         self.grenade_fire_rate = 60
 
+    def increment_health(self,x):
+        self.health = min(self.health + x,100)
+
+
     def switch_weapon(self):
         self.weapon_index = 1 - self.weapon_index
 
@@ -674,7 +708,7 @@ class PlayerCar(BaseCar):
         bullet_y = self.y + 60
 
         self.bullets.append(
-            Bullet(bullet_x, bullet_y, bullet_z, self.angle, self.quadric)
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 15,self.quadric)
         )
 
         self.muzzle_flash_timer = self.muzzle_flash_duration
@@ -689,7 +723,7 @@ class PlayerCar(BaseCar):
         y = self.y + 55
 
         self.grenades.append(
-            Grenade(x, y, z, self.angle, self.quadric)
+            Grenade(x, y, z, self.angle, 70,self.quadric)
         )
 
         self.muzzle_flash_timer = self.muzzle_flash_duration
@@ -957,6 +991,9 @@ class PlayerCar(BaseCar):
 
 
         self.draw_bullets()
+    def increment_score(self,score):
+        self.score += score
+
 class CarWarfare:
     
     def __init__(self):
@@ -994,7 +1031,7 @@ class CarWarfare:
         self.arrow = [0, 0]
         self.chunks = {}
         self.enemy_cars = {}
-
+        
 
         self.camera_height = 220
         self.camera_distance = 350
@@ -1211,8 +1248,11 @@ class CarWarfare:
 
             ex = world_x + enemy["x"]
             ez = world_z + enemy["z"]
+            if random.random() <= 0.2:
+                car_list.append(StrongEnemyCar(ex, ez, self.quadric))
+            else:
+                car_list.append(EnemyCar(ex, ez, self.quadric))
 
-            car_list.append(EnemyCar(ex, ez, self.quadric))
 
         self.enemy_cars[(chunk_x, chunk_z)] = car_list
 
@@ -1448,7 +1488,6 @@ class CarWarfare:
                             self.player.max_nitrous,
                             self.player.nitrous + self.nitrous_refill_amount
                         )
-                        self.player.score += self.nitrous_pickup_points
                         self.spawn_popup("+10", color=(0.3, 1.0, 0.3))
 
     def draw_world(self):
@@ -1631,13 +1670,19 @@ class CarWarfare:
                         bullet.alive = False
 
                         if enemy.health <= 0:
+                            if isinstance(enemy,StrongEnemyCar):      
+                                self.player.increment_score(250)
+                                self.player.increment_health(30) 
+                                
+                            else:
+    
+                                self.player.increment_score(100)
+                                self.player.increment_health(10) 
                             enemy.alive = False
-                            self.player.score += 100
 
                         break
 
         GRENADE_BLAST_RADIUS = 300
-        GRENADE_MAX_DAMAGE = 50
 
         for grenade in self.player.grenades:
 
@@ -1654,7 +1699,7 @@ class CarWarfare:
 
             if pdist < GRENADE_BLAST_RADIUS:
                 falloff = 1 - (pdist / GRENADE_BLAST_RADIUS)
-                damage = GRENADE_MAX_DAMAGE * falloff
+                damage = grenade.damage * falloff
                 self.player.health = max(0, self.player.health - damage)
 
             for car_list in self.enemy_cars.values():
@@ -1672,12 +1717,19 @@ class CarWarfare:
                     if dist < GRENADE_BLAST_RADIUS:
 
                         falloff = 1 - (dist / GRENADE_BLAST_RADIUS)
-                        damage = GRENADE_MAX_DAMAGE * falloff
+                        damage = grenade.damage * falloff
 
                         enemy.health -= damage
                         if enemy.health <= 0:
+                
+                            if isinstance(enemy,EnemyCar):      
+                                self.player.increment_score(100)
+                                self.player.increment_health(10) 
+                            else:
+                                print("StrongEnemyCar")
+                                self.player.increment_score(250)
+                                self.player.increment_health(25)  
 
-                            self.player.score += 100
                             enemy.alive = False
         
 
@@ -1695,7 +1747,7 @@ class CarWarfare:
 
                     if math.hypot(dx, dz) < BULLET_HIT_RADIUS:
 
-                        self.player.health = max(0, self.player.health - 2)
+                        self.player.health = max(0, self.player.health - bullet.damage)
                         bullet.alive = False
 
     def draw_enemies(self):
