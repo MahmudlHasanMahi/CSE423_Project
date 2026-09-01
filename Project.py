@@ -52,13 +52,13 @@ class Grenade(Projectile):
         speed = 25
         self.vx = -math.sin(angle_rad) * speed
         self.vz = -math.cos(angle_rad) * speed
-        self.vy = 12
+        self.vy = 10
 
         self.gravity = 0.6
 
         self.exploded = False
         self.explosion_timer = 0
-        self.explosion_duration = 5
+        self.explosion_duration = 7
 
     def update(self):
 
@@ -106,7 +106,7 @@ class Grenade(Projectile):
         else:
 
             t = self.explosion_timer / self.explosion_duration
-            radius = (1 - t) * 90 + 10
+            radius = (1 - t) * 150
 
             glColor3f(1.0, 0.5 * t + 0.2, 0.0)
 
@@ -375,10 +375,33 @@ class EnemyCar(BaseCar):
         self.alive = True
         self.close_to_player =1000
 
+        self.health = 100
+
+        self.bullets = []
+        self.fire_range = 1000 
+        self.fire_rate = 40        
+        self.fire_delay= 0
+
+
+    def fire_bullet(self):
+    
+        angle_rad = math.radians(self.angle)
+        distance = 70
+
+        bullet_x = self.x - math.sin(angle_rad) * distance
+        bullet_z = self.z - math.cos(angle_rad) * distance
+        bullet_y = self.y + 60
+
+        self.bullets.append(
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, self.quadric)
+        )
+
+        self.muzzle_flash_timer = self.muzzle_flash_duration
+
 
     def update(self, player_x, player_z):
 
-        detect_radius=CHUNK_COUNT * CHUNK_SIZE
+        detect_radius= CHUNK_COUNT * CHUNK_SIZE
 
         dx = player_x - self.x
         dz = player_z - self.z
@@ -395,10 +418,34 @@ class EnemyCar(BaseCar):
                 self.z -= math.cos(angle_rad) * self.move_speed
 
                 self.wheel_spin_angle += self.move_speed
+                
+            if dist < self.fire_range and self.fire_delay <= 0:
+        
+                self.fire_bullet()
+                self.fire_delay = self.fire_rate
+
         self.gun_rotation += 5
+        if self.fire_delay > 0:
+            self.fire_delay -= 1
+
+        for bullet in self.bullets:
+            bullet.update()
+
+            bx = bullet.x - self.x
+            bz = bullet.z - self.z
+
+            if math.hypot(bx, bz) > MAX_PROJECTILE_DISTANCE:
+                bullet.alive = False
+
+        self.bullets = [bul for bul in self.bullets if bul.alive]
+
+        if self.muzzle_flash_timer > 0:
+            self.muzzle_flash_timer -= 1
 
     def draw_extras(self):
         self._draw_machine_gun()
+        for bullet in self.bullets:
+                    bullet.draw()
     
     def draw_body(self):
         # return super().draw_body()
@@ -466,6 +513,14 @@ class EnemyCar(BaseCar):
         glPopMatrix()
     
 
+
+    def draw(self):
+    
+        self.draw_car()
+
+        for bullet in self.bullets:
+            bullet.draw()
+        
     
 class PlayerCar(BaseCar):
     
@@ -478,7 +533,7 @@ class PlayerCar(BaseCar):
         self.accelration = 0.07
         self.decelration = 0.2
         self.max_speed = 30
-        self.turn_speed = 3
+        self.turn_speed = 1.5
 
         self.health = 100
         self.was_colliding = False
@@ -490,15 +545,20 @@ class PlayerCar(BaseCar):
         self.grenades = []
         self.weapon_types = ["gun", "grenade"]
         self.weapon_index = 0
+        self.grenade_cooldown = 0
+        self.grenade_fire_rate = 60
 
     def switch_weapon(self):
         self.weapon_index = 1 - self.weapon_index
 
     def fire_bullet(self):
+    
         if self.weapon_types[self.weapon_index] == "gun":
             self._fire_gun()
         else:
-            self._fire_grenade()
+            if self.grenade_cooldown <= 0:
+                self._fire_grenade()
+                self.grenade_cooldown = self.grenade_fire_rate
 
     def _fire_gun(self):
 
@@ -725,6 +785,8 @@ class PlayerCar(BaseCar):
 
         if self.muzzle_flash_timer > 0:
             self.muzzle_flash_timer -= 1
+        if self.grenade_cooldown > 0:
+            self.grenade_cooldown -= 1
 
         self.wheel_spin_angle += self.speed[2]
 
@@ -740,7 +802,6 @@ class PlayerCar(BaseCar):
 class CarWarfare:
     
     def __init__(self):
-
         glutInit()
 
         glutInitDisplayMode(
@@ -768,6 +829,7 @@ class CarWarfare:
             1.0,
             1.0
         )
+        self.GAMEOVER = False
 
         self.keys = set()
 
@@ -948,7 +1010,7 @@ class CarWarfare:
 
                 self.spawn_enemies_for_chunk(x, z, chunk)
 
-
+    
     def spawn_enemies_for_chunk(self, chunk_x, chunk_z, chunk):
     
         world_x = chunk_x * CHUNK_SIZE
@@ -1102,6 +1164,10 @@ class CarWarfare:
 
         return False,()
 
+    def remove_dead_enemies(self):
+        for chunk_key, car_list in self.enemy_cars.items():
+            self.enemy_cars[chunk_key] = [e for e in car_list if e.alive]
+
     def draw_world(self):
 
         for key, chunk in self.chunks_metadata.items():
@@ -1241,13 +1307,83 @@ class CarWarfare:
 
                 enemy.update(self.player.x, self.player.z)
 
-    def draw_enemies(self):
+    def check_bullet_hits(self):
+        
+        BULLET_HIT_RADIUS = 40 
+
+        for bullet in self.player.bullets:
+            if not bullet.alive:
+                continue
+            for car_list in self.enemy_cars.values():
+    
+                for enemy in car_list:
+
+                    if not enemy.alive:
+                        continue
+
+                    dx = bullet.x - enemy.x
+                    dz = bullet.z - enemy.z
+
+                    if math.hypot(dx, dz) < BULLET_HIT_RADIUS:
+
+                        enemy.health -= 25
+                        bullet.alive = False
+
+                        if enemy.health <= 0:
+                            enemy.alive = False
+
+                        break
+        GRENADE_BLAST_RADIUS = 150
+        GRENADE_MAX_DAMAGE = 50
+
+        for grenade in self.player.grenades:
+
+            if not grenade.exploded:
+                continue
+
+            for car_list in self.enemy_cars.values():
+
+                for enemy in car_list:
+
+                    if not enemy.alive:
+                        continue
+
+                    dx = grenade.x - enemy.x
+                    dz = grenade.z - enemy.z
+
+                    dist = math.hypot(dx, dz)
+
+                    if dist < GRENADE_BLAST_RADIUS:
+
+                        falloff = 1 - (dist / GRENADE_BLAST_RADIUS)
+                        damage = GRENADE_MAX_DAMAGE * falloff
+                        print(enemy.health)
+
+                        enemy.health -= damage
+                        enemy.alive = enemy.health > 0
 
         for car_list in self.enemy_cars.values():
 
             for enemy in car_list:
 
-                enemy.draw_car()
+                for bullet in enemy.bullets:
+
+                    if not bullet.alive:
+                        continue
+
+                    dx = bullet.x - self.player.x
+                    dz = bullet.z - self.player.z
+
+                    if math.hypot(dx, dz) < BULLET_HIT_RADIUS:
+
+                        self.player.health = max(0, self.player.health - 2)
+                        bullet.alive = False
+
+    def draw_enemies(self):
+
+        for car_list in self.enemy_cars.values():
+            for enemy in car_list:
+                enemy.draw()
 
     def idle(self):
 
@@ -1255,9 +1391,12 @@ class CarWarfare:
 
         self.update_chunks()
         self.update_enemies()
+        self.check_bullet_hits()
+        self.remove_dead_enemies()
+
 
         angle_diff = self.player.angle - self.camera_angle
-
+        # angle diff & smoothing
         self.camera_angle += angle_diff * self.camera_smoothing
 
         self.player.wheel_spin_angle += (self.player.speed[2] + angle_diff * self.camera_smoothing)
