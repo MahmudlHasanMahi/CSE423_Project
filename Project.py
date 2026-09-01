@@ -1636,19 +1636,18 @@ class CarWarfare:
 
                         break
 
-        GRENADE_BLAST_RADIUS = 150
+        GRENADE_BLAST_RADIUS = 300
         GRENADE_MAX_DAMAGE = 50
 
         for grenade in self.player.grenades:
 
-            # Only apply splash damage once, at the moment of detonation -
-            # not on every frame the fireball is visible.
+   
             if not grenade.exploded or grenade.damage_applied:
                 continue
 
             grenade.damage_applied = True
 
-            # --- Damage to the player (self-damage if too close) ---
+
             pdx = grenade.x - self.player.x
             pdz = grenade.z - self.player.z
             pdist = math.hypot(pdx, pdz)
@@ -1708,9 +1707,7 @@ class CarWarfare:
                                     self.camera_x,
                                     self.camera_z
                                 )
-                
-        # for car_list in self.enemy_cars.values():
-        #     for enemy in car_list:
+       
                
     def idle(self):
 
