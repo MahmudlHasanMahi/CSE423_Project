@@ -623,6 +623,7 @@ class StrongEnemyCar(EnemyCar):
         super().__init__(x, z, quadric)
         self.move_speed = 10
         self.fire_rate  = 20
+        self.health = 200
 
     def draw_body(self, ):
         color=(157 / 255, 0 / 255, 1)
@@ -641,6 +642,83 @@ class StrongEnemyCar(EnemyCar):
         )
 
         self.muzzle_flash_timer = self.muzzle_flash_duration
+    def draw_health_bar_3d(self, camera_x, camera_z):
+        
+        if not self.alive:
+            return
+
+        width = 70
+        height = 8
+
+        x = self.x
+        y = self.y + 150
+        z = self.z
+
+        # Face the camera
+        dx = camera_x - x
+        dz = camera_z - z
+        distance = math.hypot(dx, dz)
+
+        if distance == 0:
+            distance = 1
+
+        right_x = dz / distance
+        right_z = -dx / distance
+
+        health = max(0, self.health) / 200
+
+        if health > 0.5:
+            color = (0.2, 0.8, 0.2)
+        elif health > 0.25:
+            color = (0.9, 0.7, 0.1)
+        else:
+            color = (0.9, 0.1, 0.1)
+
+        # Background
+        glColor3f(0.05, 0.05, 0.05)
+
+        glBegin(GL_QUADS)
+
+        glVertex3f(x - right_x * width/2, y - height/2, z - right_z * width/2)
+        glVertex3f(x + right_x * width/2, y - height/2, z + right_z * width/2)
+        glVertex3f(x + right_x * width/2, y + height/2, z + right_z * width/2)
+        glVertex3f(x - right_x * width/2, y + height/2, z - right_z * width/2)
+
+        glEnd()
+
+        # Health
+        health_width = width * health
+        offset = (width - health_width) / 2
+
+        glColor3f(*color)
+
+        glBegin(GL_QUADS)
+
+        glVertex3f(
+            x - right_x * width/2,
+            y - height/2,
+            z - right_z * width/2
+        )
+
+        glVertex3f(
+            x + right_x * (health_width - width/2),
+            y - height/2,
+            z + right_z * (health_width - width/2)
+        )
+
+        glVertex3f(
+            x + right_x * (health_width - width/2),
+            y + height/2,
+            z + right_z * (health_width - width/2)
+        )
+
+        glVertex3f(
+            x - right_x * width/2,
+            y + height/2,
+            z - right_z * width/2
+        )
+
+        glEnd()
     
 
 
