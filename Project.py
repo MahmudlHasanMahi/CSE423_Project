@@ -532,7 +532,7 @@ class PlayerCar(BaseCar):
         super().__init__(x, y, z, quadric)
         self.speed = [0, 0, 0]
         self.score = 0
-        self.accelration = 0.07
+        self.accelration = 0.09
         self.decelration = 0.2
         self.max_speed = 30
         self.turn_speed = 1.5
@@ -847,6 +847,21 @@ class CarWarfare:
         self.bonus_coin_spawn_timer = 120
         self.bonus_coin_spin_angle = 0.0
 
+        # ---------------- Game state / intro / game over ----------------
+        self.game_state = "name_entry"   # name_entry -> intro -> playing -> gameover
+        self.player_name = ""
+        self.blink_timer = 0
+        self.final_score = 0
+
+        self.intro_screen_index = 0
+        self.intro_texts = [
+            "OPEN WORLD ASSAULT",
+            "{name}, are you ready?",
+            "Enemies grow stronger with every kill. Nitrous won't save you forever.",
+            "Gear up. Aim true. Survive the chaos.",
+            "Press ENTER to begin your assault  |  Press SPACE to skip"
+        ]
+
         glutSpecialFunc(self.specialKeyDown)
         glutSpecialUpFunc(self.specialKeyUp)
         glutKeyboardFunc(self.keyboardListener)
@@ -1124,6 +1139,218 @@ class CarWarfare:
         glutSolidSphere(18, 14, 14)
         glPopMatrix()
 
+    def restart_game(self):
+
+        self.chunks_metadata = {}
+        self.enemy_cars = {}
+        self.generate_world()
+
+        self.player = PlayerCar(0, 40, 0, self.quadric)
+
+        self.popups = []
+        self.bonus_coin = None
+        self.bonus_coin_spawn_timer = 120
+        self.keys = set()
+
+        self.game_state = "playing"
+
+    def calc_text_width(self, text, font=GLUT_BITMAP_HELVETICA_18):
+        return sum(glutBitmapWidth(font, ord(ch)) for ch in text)
+
+    def lerp_color(self, c1, c2, t):
+        return (
+            c1[0] + (c2[0] - c1[0]) * t,
+            c1[1] + (c2[1] - c1[1]) * t,
+            c1[2] + (c2[2] - c1[2]) * t
+        )
+
+    def draw_gradient_bold_text(self, x, y, text, font, color_start, color_end):
+
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluOrtho2D(0, 1000, 0, 800)
+
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        cur_x = x
+        n = max(1, len(text) - 1)
+
+        for i, ch in enumerate(text):
+
+            t = (i / n) if len(text) > 1 else 0.0
+            glColor3f(*self.lerp_color(color_start, color_end, t))
+
+            # Fake "bold": draw each glyph twice, offset by 1px, since
+            # bitmap fonts don't have a real bold variant
+            glRasterPos2f(cur_x, y)
+            glutBitmapCharacter(font, ord(ch))
+
+            glRasterPos2f(cur_x + 1, y)
+            glutBitmapCharacter(font, ord(ch))
+
+            cur_x += glutBitmapWidth(font, ord(ch))
+
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
+    def draw_centered_gradient_text(self, y, text, font=GLUT_BITMAP_TIMES_ROMAN_24,
+                                     color_start=(1.0, 0.9, 0.2), color_end=(1.0, 0.4, 0.1)):
+
+        width = self.calc_text_width(text, font)
+        x = (WINDOW_WIDTH - width) / 2
+
+        self.draw_gradient_bold_text(x, y, text, font, color_start, color_end)
+
+    def draw_gradient_background(self, top_color, bottom_color):
+
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluOrtho2D(0, 1000, 0, 800)
+
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        glBegin(GL_QUADS)
+        glColor3f(*top_color)
+        glVertex2f(0, 800)
+        glVertex2f(1000, 800)
+        glColor3f(*bottom_color)
+        glVertex2f(1000, 0)
+        glVertex2f(0, 0)
+        glEnd()
+
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
+    def draw_menu_speed_lines(self, color):
+
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluOrtho2D(0, 1000, 0, 800)
+
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        glColor3f(*color)
+        glLineWidth(3)
+
+        offset = (self.blink_timer * 2) % 120
+
+        glBegin(GL_LINES)
+
+        x = -300 + offset
+        while x < 1300:
+            glVertex2f(x, 0)
+            glVertex2f(x - 250, 800)
+            x += 120
+
+        glEnd()
+
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
+    def draw_centered_text(self, y, text, font=GLUT_BITMAP_HELVETICA_18, color=(1, 1, 1)):
+
+        width = self.calc_text_width(text, font)
+        x = (WINDOW_WIDTH - width) / 2
+
+        self.player.draw_text(x, y, text, font=font, color=color)
+
+    def draw_name_entry_screen(self):
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glLoadIdentity()
+        glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+        glDisable(GL_DEPTH_TEST)
+
+        self.draw_gradient_background((0.05, 0.05, 0.15), (0.15, 0.15, 0.35))
+        self.draw_menu_speed_lines((0.22, 0.22, 0.4))
+
+        self.draw_centered_gradient_text(
+            500, "OPEN WORLD ASSAULT",
+            font=GLUT_BITMAP_TIMES_ROMAN_24,
+            color_start=(1.0, 0.9, 0.2), color_end=(1.0, 0.4, 0.1)
+        )
+
+        self.draw_centered_text(430, "ENTER YOUR NAME, DRIVER:", font=GLUT_BITMAP_TIMES_ROMAN_24)
+
+        cursor = "_" if (self.blink_timer // 20) % 2 == 0 else " "
+        self.draw_centered_gradient_text(
+            390, self.player_name + cursor,
+            font=GLUT_BITMAP_TIMES_ROMAN_24,
+            color_start=(0.3, 1.0, 0.5), color_end=(0.2, 0.8, 1.0)
+        )
+
+        self.draw_centered_text(
+            330, "Press ENTER to confirm",
+            color=(0.7, 0.7, 0.7)
+        )
+
+        glEnable(GL_DEPTH_TEST)
+
+    def draw_intro_screen(self):
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glLoadIdentity()
+        glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+        glDisable(GL_DEPTH_TEST)
+
+        self.draw_gradient_background((0.05, 0.05, 0.15), (0.15, 0.15, 0.35))
+        self.draw_menu_speed_lines((0.22, 0.22, 0.4))
+
+        text = self.intro_texts[self.intro_screen_index].replace("{name}", self.player_name)
+
+        self.draw_centered_gradient_text(
+            430, text,
+            font=GLUT_BITMAP_TIMES_ROMAN_24,
+            color_start=(1.0, 0.9, 0.2), color_end=(1.0, 0.4, 0.1)
+        )
+
+        glEnable(GL_DEPTH_TEST)
+
+    def draw_gameover_screen(self):
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glLoadIdentity()
+        glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+        glDisable(GL_DEPTH_TEST)
+
+        self.draw_gradient_background((0.05, 0.02, 0.02), (0.35, 0.05, 0.05))
+        self.draw_menu_speed_lines((0.45, 0.12, 0.12))
+
+        self.draw_centered_gradient_text(
+            480, "GAME OVER",
+            font=GLUT_BITMAP_TIMES_ROMAN_24,
+            color_start=(1.0, 0.9, 0.2), color_end=(1.0, 0.1, 0.1)
+        )
+
+        self.draw_centered_text(420, f"{self.player_name}, you lose.", font=GLUT_BITMAP_TIMES_ROMAN_24)
+
+        self.draw_centered_text(
+            380, f"Final Score: {self.final_score}",
+            color=(1.0, 0.85, 0.0)
+        )
+
+        self.draw_centered_text(
+            320, "Press ENTER to restart",
+            color=(0.7, 0.7, 0.7)
+        )
+
+        glEnable(GL_DEPTH_TEST)
+
     def check_nitrous_pickup(self):
         player_chunk_x, player_chunk_z = self.get_player_chunk()
         for dx in (-1, 0, 1):
@@ -1333,6 +1560,80 @@ class CarWarfare:
         if self.GAMEOVER:
             return
 
+        self.blink_timer += 1
+
+        if self.game_state == "playing":
+
+            self.player.update(
+                self.keys,
+                collision_check=self.check_collision
+            )
+
+            self.check_nitrous_pickup()
+            self.check_growth_pickup()
+            self.update_bonus_coin()
+
+            # Update popups
+            for popup in self.popups:
+                popup["y"] += 0.6
+                popup["timer"] -= 1
+
+            self.popups = [
+                p for p in self.popups
+                if p["timer"] > 0
+            ]
+
+            # Infinite world
+            self.update_chunks()
+
+            # Enemies
+            self.update_enemies()
+            self.check_bullet_hits()
+            self.remove_dead_enemies()
+
+            # Camera
+            angle_diff = self.player.angle - self.camera_angle
+            self.camera_angle += angle_diff * self.camera_smoothing
+
+            self.player.wheel_spin_angle += (
+                self.player.speed[2]
+                + angle_diff * self.camera_smoothing
+            )
+
+            # Player health game over
+            if self.player.health <= 0:
+                self.final_score = self.player.score
+                self.game_state = "gameover"
+
+            # Car shrink game over
+            if self.player.scale <= MIN_SCALE:
+                self.GAMEOVER = True
+
+        glutPostRedisplay()
+    def showScreen(self):
+
+        if self.game_state == "name_entry":
+            self.draw_name_entry_screen()
+            glutSwapBuffers()
+            return
+
+        if self.game_state == "intro":
+            self.draw_intro_screen()
+            glutSwapBuffers()
+            return
+
+        if self.game_state == "gameover":
+            self.draw_gameover_screen()
+            glutSwapBuffers()
+            return
+
+        glClearColor(0.50, 0.75, 1.0, 1.0)
+
+        glClear(
+            GL_COLOR_BUFFER_BIT |
+            GL_DEPTH_BUFFER_BIT
+        )
+
         self.player.update(self.keys, collision_check=self.check_collision)
         self.check_nitrous_pickup()
         self.check_growth_pickup()
@@ -1357,40 +1658,119 @@ class CarWarfare:
         glutPostRedisplay()
 
     def showScreen(self):
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        if self.game_state == "name_entry":
+            self.draw_name_entry_screen()
+            glutSwapBuffers()
+            return
+
+        if self.game_state == "intro":
+            self.draw_intro_screen()
+            glutSwapBuffers()
+            return
+
+        if self.game_state == "gameover":
+            self.draw_gameover_screen()
+            glutSwapBuffers()
+            return
+
+        glClearColor(0.50, 0.75, 1.0, 1.0)
+
+        glClear(
+            GL_COLOR_BUFFER_BIT |
+            GL_DEPTH_BUFFER_BIT
+        )
+
         glLoadIdentity()
         glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+
         self.setupCamera()
+
         self.draw_world()
         self.draw_enemies()
         self.player.show_car()
 
         if self.bonus_coin is not None:
             seconds_left = self.bonus_coin["timer"] // 60 + 1
-            self.player.draw_text(10, 665, f"Bonus Coin! {seconds_left}s", color=(1.0, 0.85, 0.0))
+
+            self.player.draw_text(
+                10,
+                665,
+                f"Bonus Coin! {seconds_left}s",
+                color=(1.0, 0.85, 0.0)
+            )
 
         for popup in self.popups:
-            self.player.draw_text(popup["x"], popup["y"], popup["text"], color=popup["color"])
+            self.player.draw_text(
+                popup["x"],
+                popup["y"],
+                popup["text"],
+                color=popup["color"]
+            )
 
         if self.GAMEOVER:
             self.player.draw_text(
-                WINDOW_WIDTH // 2 - 180, 
-                WINDOW_HEIGHT // 2, 
-                "GAME OVER - CAR SHRUNK TOO MUCH!", 
-                font=GLUT_BITMAP_TIMES_ROMAN_24, 
+                WINDOW_WIDTH // 2 - 180,
+                WINDOW_HEIGHT // 2,
+                "GAME OVER - CAR SHRUNK TOO MUCH!",
+                font=GLUT_BITMAP_TIMES_ROMAN_24,
                 color=(1.0, 0.0, 0.0)
             )
 
         glutSwapBuffers()
 
     def specialKeyDown(self, key, x, y):
-        self.keys.add(key)
+        if self.game_state == "playing":
+            self.keys.add(key)
 
     def specialKeyUp(self, key, x, y):
         if key in self.keys:
             self.keys.remove(key)
 
     def keyboardListener(self, key, x, y):
+
+        if self.game_state == "name_entry":
+
+            if key in (b'\r', b'\n'):
+                if len(self.player_name) == 0:
+                    self.player_name = "Player"
+                self.game_state = "intro"
+                self.intro_screen_index = 0
+
+            elif key == b'\x08':  # backspace
+                self.player_name = self.player_name[:-1]
+
+            else:
+                try:
+                    ch = key.decode('utf-8')
+                    if ch.isprintable() and len(self.player_name) < 15:
+                        self.player_name += ch
+                except UnicodeDecodeError:
+                    pass
+
+            return
+
+        if self.game_state == "intro":
+
+            if key in (b'\r', b'\n'):
+                self.intro_screen_index += 1
+                if self.intro_screen_index >= len(self.intro_texts):
+                    self.game_state = "playing"
+
+            elif key in (b' ', b'\x1b'):
+                self.game_state = "playing"
+
+            return
+
+        if self.game_state == "gameover":
+
+            if key in (b'\r', b'\n'):
+                self.restart_game()
+
+            return
+
+        # ---- normal in-game controls (only reached while playing) ----
+
         if key == b'q':
             self.pov = not self.pov
         if key== b'a':
