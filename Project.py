@@ -35,12 +35,11 @@ GROWTH_AMOUNT = 0.1
 MIN_SCALE = 0.3
 
 class Projectile:
-    def __init__(self, x, y, z, angle, damage,quadric):
+    def __init__(self, x, y, z, angle, damage, quadric):
         self.x = x
         self.y = y
         self.z = z
         self.damage = damage
-
         self.angle = angle
         self._speed = 75
         self.quadric = quadric
@@ -55,15 +54,12 @@ class Projectile:
         self.x -= math.sin(angle_rad) * self.speed
         self.z -= math.cos(angle_rad) * self.speed
 
-    def set_speed(self,speed):
+    def set_speed(self, speed):
         self._speed = speed   
 
 class Grenade(Projectile):
-    
-    def __init__(self, x, y, z, angle, damage,quadric):
-
+    def __init__(self, x, y, z, angle, damage, quadric):
         super().__init__(x, y, z, angle, damage, quadric)
-
         angle_rad = math.radians(angle)
         speed = 25
         self.vx = -math.sin(angle_rad) * speed
@@ -108,8 +104,7 @@ class Grenade(Projectile):
         glPopMatrix()
 
 class Bullet(Projectile):
-    def __init__(self, x, y, z, angle, damage,quadric):
-    
+    def __init__(self, x, y, z, angle, damage, quadric):
         super().__init__(x, y, z, angle, damage, quadric)
         
     def draw(self):
@@ -140,10 +135,10 @@ class BaseCar:
         self.muzzle_flash_duration = 4
         self.scale = 1.0
 
-    def draw_body(self):
+    def draw_body(self, color=(0.05, 0.15, 0.85)):
         glPushMatrix()
         glScalef(1.5, 0.5, 2.0)
-        glColor3f(0.05, 0.15, 0.85)
+        glColor3f(*color)
         glutSolidCube(60)
         glPopMatrix()
 
@@ -274,7 +269,6 @@ class EnemyCar(BaseCar):
         self.fire_rate  = 70
         self.fire_delay = 0
 
-
     def fire_bullet(self):
         angle_rad = math.radians(self.angle)
         distance = 70
@@ -283,7 +277,7 @@ class EnemyCar(BaseCar):
         bullet_y = self.y + 60
 
         self.bullets.append(
-            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 2 ,self.quadric)
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 2, self.quadric)
         )
 
         self.muzzle_flash_timer = self.muzzle_flash_duration
@@ -371,13 +365,10 @@ class EnemyCar(BaseCar):
         for bullet in self.bullets:
             bullet.draw()
     
-    def draw_body(self,color=(128/255, 26/255, 19/255)):
-        # return super().draw_body()
+    def draw_body(self, color=(128/255, 26/255, 19/255)):
         glPushMatrix()
         glScalef(1.5, 0.5, 2.0)
-
         glColor3f(*color)
-
         glutSolidCube(60)
         glPopMatrix()
 
@@ -420,7 +411,6 @@ class EnemyCar(BaseCar):
         for bullet in self.bullets:
             bullet.draw()
             
-
 class StrongEnemyCar(EnemyCar):
     def __init__(self, x, z, quadric):
         super().__init__(x, z, quadric)
@@ -428,46 +418,40 @@ class StrongEnemyCar(EnemyCar):
         self.fire_rate  = 20
         self.health = 200
 
-    def draw_body(self, ):
-        color=(157 / 255, 0 / 255, 1)
-        return super().draw_body(color)
+    def draw_body(self):
+        color = (157 / 255, 0 / 255, 1)
+        super().draw_body(color)
+
     def fire_bullet(self):
-        
         angle_rad = math.radians(self.angle)
         distance = 70
-
         bullet_x = self.x - math.sin(angle_rad) * distance
         bullet_z = self.z - math.cos(angle_rad) * distance
         bullet_y = self.y + 60
 
         self.bullets.append(
-            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 8 ,self.quadric)
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 8, self.quadric)
         )
-
         self.muzzle_flash_timer = self.muzzle_flash_duration
+
     def draw_health_bar_3d(self, camera_x, camera_z):
-        
         if not self.alive:
             return
 
         width = 70
         height = 8
-
         x = self.x
         y = self.y + 150
         z = self.z
 
-        # Face the camera
         dx = camera_x - x
         dz = camera_z - z
         distance = math.hypot(dx, dz)
-
         if distance == 0:
             distance = 1
 
         right_x = dz / distance
         right_z = -dx / distance
-
         health = max(0, self.health) / 200
 
         if health > 0.5:
@@ -477,55 +461,22 @@ class StrongEnemyCar(EnemyCar):
         else:
             color = (0.9, 0.1, 0.1)
 
-        # Background
         glColor3f(0.05, 0.05, 0.05)
-
         glBegin(GL_QUADS)
-
         glVertex3f(x - right_x * width/2, y - height/2, z - right_z * width/2)
         glVertex3f(x + right_x * width/2, y - height/2, z + right_z * width/2)
         glVertex3f(x + right_x * width/2, y + height/2, z + right_z * width/2)
         glVertex3f(x - right_x * width/2, y + height/2, z - right_z * width/2)
-
         glEnd()
 
-        # Health
         health_width = width * health
-        offset = (width - health_width) / 2
-
         glColor3f(*color)
-
         glBegin(GL_QUADS)
-
-        glVertex3f(
-            x - right_x * width/2,
-            y - height/2,
-            z - right_z * width/2
-        )
-
-        glVertex3f(
-            x + right_x * (health_width - width/2),
-            y - height/2,
-            z + right_z * (health_width - width/2)
-        )
-
-        glVertex3f(
-            x + right_x * (health_width - width/2),
-            y + height/2,
-            z + right_z * (health_width - width/2)
-        )
-
-        glVertex3f(
-            x - right_x * width/2,
-            y + height/2,
-            z - right_z * width/2
-        )
-
+        glVertex3f(x - right_x * width/2, y - height/2, z - right_z * width/2)
+        glVertex3f(x + right_x * (health_width - width/2), y - height/2, z + right_z * (health_width - width/2))
+        glVertex3f(x + right_x * (health_width - width/2), y + height/2, z + right_z * (health_width - width/2))
+        glVertex3f(x - right_x * width/2, y + height/2, z - right_z * width/2)
         glEnd()
-    
-
-
-
 
 class PlayerCar(BaseCar):
     def __init__(self, x, y, z, quadric):
@@ -554,9 +505,8 @@ class PlayerCar(BaseCar):
         self.grenade_cooldown = 0
         self.grenade_fire_rate = 60
 
-    def increment_health(self,x):
-        self.health = min(self.health + x,100)
-
+    def increment_health(self, x):
+        self.health = min(self.health + x, 100)
 
     def switch_weapon(self):
         self.weapon_index = 1 - self.weapon_index
@@ -577,9 +527,8 @@ class PlayerCar(BaseCar):
         bullet_y = self.y + 60
 
         self.bullets.append(
-            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 15,self.quadric)
+            Bullet(bullet_x, bullet_y, bullet_z, self.angle, 15, self.quadric)
         )
-
         self.muzzle_flash_timer = self.muzzle_flash_duration
 
     def _fire_grenade(self):
@@ -588,7 +537,7 @@ class PlayerCar(BaseCar):
         x = self.x - math.sin(angle_rad) * distance
         z = self.z - math.cos(angle_rad) * distance
         y = self.y + 55
-        self.grenades.append(Grenade(x, y, z, self.angle, 50,self.quadric))
+        self.grenades.append(Grenade(x, y, z, self.angle, 50, self.quadric))
         self.muzzle_flash_timer = self.muzzle_flash_duration
 
     def draw_extras(self):
@@ -808,7 +757,8 @@ class PlayerCar(BaseCar):
         self.draw_health_bar(90, 745, 150, 18)
         self.draw_nitrous_bar(90, 710, 150, 14)
         self.draw_bullets()
-    def increment_score(self,score):
+
+    def increment_score(self, score):
         self.score += score
 
 class CarWarfare:
@@ -827,11 +777,18 @@ class CarWarfare:
         self.chunks = {}
         self.enemy_cars = {}
         
-
         self.camera_height = 220
         self.camera_distance = 350
         self.camera_angle = 0.0
         self.camera_smoothing = 0.06
+
+        # ---------------- Weather Variables ----------------
+        self.weather = 0  # 0: Clear, 1: Rain, 2: Snow
+        self.thunder_timer = 0
+        self.weather_particles = [
+            [random.uniform(-600, 600), random.uniform(0, 600), random.uniform(-600, 600)]
+            for _ in range(1200)
+        ]
 
         quadric = gluNewQuadric()
         self.quadric = quadric
@@ -943,21 +900,34 @@ class CarWarfare:
 
     def draw_tree(self):
         glPushMatrix()
-        glColor3f(0.35, 0.18, 0.05)
+        if self.weather == 1:
+            glColor3f(0.2, 0.1, 0.05)
+        else:
+            glColor3f(0.35, 0.18, 0.05)
         glTranslatef(0, 45, 0)
         glScalef(0.25, 1.5, 0.25)
         glutSolidCube(40)
         glPopMatrix()
 
         glPushMatrix()
-        glColor3f(0.05, 0.45, 0.05)
+        if self.weather == 2:
+            glColor3f(0.7, 0.8, 1.0)
+        elif self.weather == 1:
+            glColor3f(0.02, 0.25, 0.02)
+        else:
+            glColor3f(0.05, 0.45, 0.05)
         glTranslatef(0, 120, 0)
         glutSolidSphere(60, 12, 12)
         glPopMatrix()
 
     def draw_stone(self):
         glPushMatrix()
-        glColor3f(0.35, 0.35, 0.35)
+        if self.weather == 2:
+            glColor3f(0.7, 0.7, 0.9)
+        elif self.weather == 1:
+            glColor3f(0.2, 0.2, 0.2)
+        else:
+            glColor3f(0.35, 0.35, 0.35)
         glScalef(1.5, 0.8, 1.2)
         glutSolidSphere(25, 10, 10)
         glPopMatrix()
@@ -997,12 +967,18 @@ class CarWarfare:
             else:
                 car_list.append(EnemyCar(ex, ez, self.quadric))
 
-
         self.enemy_cars[(chunk_x, chunk_z)] = car_list
 
     def draw_ground(self):
         half = CHUNK_SIZE / 2
-        glColor3f(0.25, 0.55, 0.20)
+        
+        if self.weather == 2:
+            glColor3f(0.85, 0.9, 0.95)
+        elif self.weather == 1:
+            glColor3f(0.15, 0.35, 0.15)
+        else:
+            glColor3f(0.25, 0.55, 0.20)
+            
         glBegin(GL_QUADS)
         glVertex3f(-half, 0, -half)
         glVertex3f(half, 0, -half)
@@ -1393,6 +1369,33 @@ class CarWarfare:
                         self.player.score += 20
                         self.spawn_popup("Size UP!", color=(0.1, 1.0, 0.6))
 
+    def draw_weather(self):
+        if self.weather == 0:
+            return
+
+        glPushMatrix()
+        glTranslatef(self.player.x, 0, self.player.z)
+
+        if self.weather == 1:
+            glColor3f(0.5, 0.6, 0.7)
+            glLineWidth(1.5)
+            glBegin(GL_LINES)
+            for p in self.weather_particles:
+                glVertex3f(p[0], p[1], p[2])
+                glVertex3f(p[0], p[1] - 25, p[2])
+            glEnd()
+            glLineWidth(1.0)
+        elif self.weather == 2:
+            glColor3f(1,1, 1)
+            glPointSize(4.0) 
+            glBegin(GL_POINTS)
+            for p in self.weather_particles:
+                glVertex3f(p[0], p[1], p[2])
+            glEnd()
+            glPointSize(1.0)
+            
+        glPopMatrix()
+
     def draw_world(self):
         for key, chunk in self.chunks_metadata.items():
             chunk_x = chunk["x"]
@@ -1436,6 +1439,8 @@ class CarWarfare:
                 glPopMatrix()
 
             glPopMatrix()
+
+        self.draw_weather()
         self.draw_bonus_coin()
 
     def setupCamera(self):
@@ -1488,16 +1493,13 @@ class CarWarfare:
                         enemy.health -= 25
                         bullet.alive = False
                         if enemy.health <= 0:
-                            if isinstance(enemy,StrongEnemyCar):      
+                            if isinstance(enemy, StrongEnemyCar):     
                                 self.player.increment_score(250)
                                 self.player.increment_health(30) 
-                                
                             else:
-    
                                 self.player.increment_score(100)
                                 self.player.increment_health(10) 
                             enemy.alive = False
-
                         break
 
         GRENADE_BLAST_RADIUS = 300
@@ -1527,15 +1529,13 @@ class CarWarfare:
 
                         enemy.health -= damage
                         if enemy.health <= 0:
-                
-                            if isinstance(enemy,EnemyCar):      
+                            if isinstance(enemy, EnemyCar) and not isinstance(enemy, StrongEnemyCar):     
                                 self.player.increment_score(100)
                                 self.player.increment_health(10) 
                             else:
                                 print("StrongEnemyCar")
                                 self.player.increment_score(250)
                                 self.player.increment_health(25)  
-
                             enemy.alive = False
         
         for car_list in self.enemy_cars.values():
@@ -1546,7 +1546,6 @@ class CarWarfare:
                     dx = bullet.x - self.player.x
                     dz = bullet.z - self.player.z
                     if math.hypot(dx, dz) < BULLET_HIT_RADIUS:
-
                         self.player.health = max(0, self.player.health - bullet.damage)
                         bullet.alive = False
 
@@ -1582,6 +1581,30 @@ class CarWarfare:
                 p for p in self.popups
                 if p["timer"] > 0
             ]
+            
+            # ---------------- Weather Logic ----------------
+            if self.weather == 1:
+                if self.thunder_timer > 0:
+                    self.thunder_timer -= 1
+                elif random.random() < 0.02: 
+                    self.thunder_timer = random.randint(2, 5)
+
+                for p in self.weather_particles:
+                    p[1] -= 25
+                    if p[1] < 0:
+                        p[1] = 600
+                        p[0] = random.uniform(-600, 600)
+                        p[2] = random.uniform(-600, 600)
+                        
+            elif self.weather == 2:
+                for p in self.weather_particles:
+                    p[1] -= 8
+                    p[0] += random.uniform(-2, 2)
+                    p[2] += random.uniform(-2, 2)
+                    if p[1] < 0:
+                        p[1] = 600
+                        p[0] = random.uniform(-600, 600)
+                        p[2] = random.uniform(-600, 600)
 
             # Infinite world
             self.update_chunks()
@@ -1610,52 +1633,6 @@ class CarWarfare:
                 self.GAMEOVER = True
 
         glutPostRedisplay()
-    def showScreen(self):
-
-        if self.game_state == "name_entry":
-            self.draw_name_entry_screen()
-            glutSwapBuffers()
-            return
-
-        if self.game_state == "intro":
-            self.draw_intro_screen()
-            glutSwapBuffers()
-            return
-
-        if self.game_state == "gameover":
-            self.draw_gameover_screen()
-            glutSwapBuffers()
-            return
-
-        glClearColor(0.50, 0.75, 1.0, 1.0)
-
-        glClear(
-            GL_COLOR_BUFFER_BIT |
-            GL_DEPTH_BUFFER_BIT
-        )
-
-        self.player.update(self.keys, collision_check=self.check_collision)
-        self.check_nitrous_pickup()
-        self.check_growth_pickup()
-        self.update_bonus_coin()
-
-        if self.player.scale <= MIN_SCALE:
-            self.GAMEOVER = True
-
-        for popup in self.popups:
-            popup["y"] += 0.6
-            popup["timer"] -= 1
-
-        self.popups = [p for p in self.popups if p["timer"] > 0]
-        self.update_chunks()
-        self.update_enemies()
-        self.check_bullet_hits()
-        self.remove_dead_enemies()
-
-        angle_diff = self.player.angle - self.camera_angle
-        self.camera_angle += angle_diff * self.camera_smoothing
-        self.player.wheel_spin_angle += (self.player.speed[2] + angle_diff * self.camera_smoothing)
-        glutPostRedisplay()
 
     def showScreen(self):
 
@@ -1674,7 +1651,16 @@ class CarWarfare:
             glutSwapBuffers()
             return
 
-        glClearColor(0.50, 0.75, 1.0, 1.0)
+        # ---- Weather Colors ----
+        if self.weather == 1:
+            if self.thunder_timer > 0:
+                glClearColor(0.8, 0.8, 0.9, 1.0)
+            else:
+                glClearColor(0.2, 0.2, 0.15, 1.0)
+        elif self.weather == 2:
+            glClearColor(0.9, 0.95, 1.0, 1.0)
+        else:
+            glClearColor(0.50, 0.75, 1.0, 1.0)
 
         glClear(
             GL_COLOR_BUFFER_BIT |
@@ -1773,16 +1759,18 @@ class CarWarfare:
 
         if key == b'q':
             self.pov = not self.pov
-        if key== b'a':
+        elif key == b'a':
             self.arrow[0] -= 20
-        if key== b'd':
+        elif key == b'd':
             self.arrow[0] += 20
-        if key == b'w':
+        elif key == b'w':
             self.arrow[1] += 20
-        if key == b's':
+        elif key == b's':
             self.arrow[1] -= 20
-        if key == b'v':
+        elif key == b'v':
             self.player.switch_weapon()
+        elif key == b'm':
+            self.weather = (self.weather + 1) % 3
         elif key == b'f':
             self.player.fire_bullet()
         elif key == b' ':
